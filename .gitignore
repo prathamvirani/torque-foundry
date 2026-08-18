@@ -1,24 +1,26 @@
 # Torque Foundry / Unity
+# Unity lives under Game/, so generated folders must be ignored at any depth.
 
-/[Ll]ibrary/
-/[Tt]emp/
-/[Oo]bj/
-/[Bb]uild/
-/[Bb]uilds/
-/[Ll]ogs/
-/[Uu]ser[Ss]ettings/
-/[Mm]emoryCaptures/
-/[Rr]ecordings/
+**/[Ll]ibrary/
+**/[Tt]emp/
+**/[Oo]bj/
+**/[Bb]uild/
+**/[Bb]uilds/
+**/[Ll]ogs/
+**/[Uu]ser[Ss]ettings/
+**/[Mm]emoryCaptures/
+**/[Rr]ecordings/
 
 # Asset Store Tools
-/[Aa]ssets/AssetStoreTools*
+**/[Aa]ssets/AssetStoreTools*
 
-# IDE
+# IDE-generated files
 .vs/
 .vscode/
 .idea/
 *.csproj
 *.sln
+*.slnx
 *.suo
 *.user
 *.userprefs
