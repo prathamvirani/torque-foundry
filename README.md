@@ -21,10 +21,14 @@ The first development target is the Engine Lab: a configurable inline-four with 
 
 ## Current toolchain
 
-- Unity 6 LTS family
+- Unity 6.5 Supported release
 - C#
 - Git + Git LFS
 - GitHub
+
+## Unity version policy
+
+Torque Foundry intentionally follows Unity's Supported/Update releases when newer features are useful rather than remaining permanently on an LTS release. Editor upgrades should be deliberate: commit/backup first, verify package compatibility, upgrade the project, then run validation/regression tests before continuing development.
 
 ## Tracker
 
