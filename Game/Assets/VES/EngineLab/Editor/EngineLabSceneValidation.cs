@@ -16,10 +16,13 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
         private const string ScenePath = "Assets/VES/EngineLab/Scenes/EngineLab.unity";
         private const string GeneratedRootName = "Generated I4 Visual Fidelity Assembly";
         private const string InteractiveValidationArgument = "-torqueFoundryValidateEngineLab";
+        private const string InteractiveValidationRequestFile = "EngineLabInteractiveValidation.request";
+        private const string ValidationRequestDirectory = "Logs";
         private const string InteractiveValidationSessionKey = "TorqueFoundry.EngineLabInteractiveValidationRanAlignmentV2";
         private const string PlayAuditArgument = "-torqueFoundryPlayAuditEngineLab";
-        private const string PlayAuditActiveKey = "TorqueFoundry.EngineLabPlayAudit.AlignmentV4.Active";
-        private const string PlayAuditPhaseKey = "TorqueFoundry.EngineLabPlayAudit.AlignmentV4.Phase";
+        private const string PlayAuditRequestFile = "EngineLabPlayAudit.request";
+        private const string PlayAuditActiveKey = "TorqueFoundry.EngineLabPlayAudit.TimingChainV1.Active";
+        private const string PlayAuditPhaseKey = "TorqueFoundry.EngineLabPlayAudit.TimingChainV1.Phase";
         private const float PositionToleranceM = 0.00001f;
         private static string InteractiveValidationSessionKeyForProcess =>
             InteractiveValidationSessionKey + "." + System.Diagnostics.Process.GetCurrentProcess().Id;
@@ -29,19 +32,27 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
         private static Transform[] playAuditValveHeads;
         private static Vector3[] playAuditSeats;
         private static bool[] playAuditSawPeak;
-        private static bool[] playAuditSawClosed;
+        private static bool[] playAuditSawClosedAfterPeak;
+        private static Transform playAuditChainMarker;
+        private static Vector3 playAuditPreviousChainMarkerPosition;
+        private static double playAuditChainStartTravelM;
+        private static float playAuditMaximumChainFrameStepM;
+        private static int playAuditChainCaptureIndex;
         private static float playAuditLastAngleDeg;
         private static float playAuditUnwrappedAngleDeg;
         private static int playAuditCaptureIndex;
         private static double playAuditStartTime;
         private static readonly float[] PlayAuditCaptureAnglesDeg = { 0f, 90f, 180f, 360f, 540f, 720f };
+        private static readonly float[] PlayAuditChainCaptureFractions = { 0f, 0.25f, 0.50f, 0.75f, 1f };
 
         [InitializeOnLoadMethod]
         private static void ScheduleRequestedInteractiveValidation()
         {
             if (Application.isBatchMode) return;
             string[] arguments = Environment.GetCommandLineArgs();
-            if (Array.IndexOf(arguments, PlayAuditArgument) >= 0)
+            bool playAuditRequested = Array.IndexOf(arguments, PlayAuditArgument) >= 0
+                                      || ConsumeValidationRequest(PlayAuditRequestFile);
+            if (playAuditRequested)
             {
                 if (!SessionState.GetBool(PlayAuditActiveKey, false))
                 {
@@ -52,9 +63,22 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
                 return;
             }
 
+            bool interactiveValidationRequested = Array.IndexOf(arguments, InteractiveValidationArgument) >= 0
+                                                  || ConsumeValidationRequest(InteractiveValidationRequestFile);
             if (SessionState.GetBool(InteractiveValidationSessionKeyForProcess, false)
-                || Array.IndexOf(arguments, InteractiveValidationArgument) < 0) return;
+                || !interactiveValidationRequested) return;
             EditorApplication.delayCall += RunRequestedInteractiveValidation;
+        }
+
+        private static bool ConsumeValidationRequest(string fileName)
+        {
+            // Single-use request files let an already licensed interactive editor
+            // run the same validators without starting a second project instance.
+            string path = Path.GetFullPath(Path.Combine(
+                Application.dataPath, "..", ValidationRequestDirectory, fileName));
+            if (!File.Exists(path)) return false;
+            File.Delete(path);
+            return true;
         }
 
         [MenuItem("Torque Foundry/Validate Engine Lab Scene")]
@@ -158,8 +182,10 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
                     string reportPath = Path.GetFullPath(Path.Combine(Application.dataPath,
                         "../Logs/EngineLabPlayModeCycleAudit.txt"));
                     string summary = succeeded && consoleErrorCount == 0
-                        ? "Engine Lab Play Mode 720-degree audit PASSED: every rendered intake and exhaust valve "
-                          + "reached visible peak lift and returned to its seat during one continuous cycle; Console red errors = 0."
+                        ? "Engine Lab Play Mode timing-drive audit PASSED: every rendered intake and exhaust valve "
+                          + "opened and closed during a continuous 720-degree cycle, one timing-chain marker completed "
+                          + $"a full closed-loop circulation without a positional snap (maximum frame step "
+                          + $"{playAuditMaximumChainFrameStepM:R} m), and Console red errors = 0."
                         : $"Engine Lab Play Mode 720-degree audit FAILED: success={succeeded}, Console red errors={consoleErrorCount}.";
                     Directory.CreateDirectory(Path.GetDirectoryName(reportPath));
                     File.AppendAllText(reportPath, summary + Environment.NewLine);
@@ -188,7 +214,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
             playAuditValveHeads = new Transform[16];
             playAuditSeats = new Vector3[16];
             playAuditSawPeak = new bool[16];
-            playAuditSawClosed = new bool[16];
+            playAuditSawClosedAfterPeak = new bool[16];
             for (int sideIndex = 0; sideIndex < 2; sideIndex++)
             {
                 ValveSide side = sideIndex == 0 ? ValveSide.Intake : ValveSide.Exhaust;
@@ -207,19 +233,30 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
                 }
             }
 
+            playAuditChainMarker = FindDescendant(generatedRoot, "Moving timing-chain marker 1");
+            Require(playAuditChainMarker != null, "Play Mode audit is missing a moving timing-chain marker.");
+            Require(playAuditAssembly.TimingChainLengthM > 0f,
+                "Play Mode audit found no closed timing-chain path length.");
+
             playAuditAssembly.SetInspectionMode(EngineInspectionMode.Cutaway);
             playAuditAssembly.SetTeachingAnimationPlaying(false);
             playAuditAssembly.SetCrankAngleDeg(0f);
-            playAuditAssembly.SetTeachingAnimationRpm(15f);
+            playAuditAssembly.SetTeachingAnimationRpm(30f);
             playAuditAssembly.SetTeachingAnimationPlaying(true);
             playAuditLastAngleDeg = playAuditAssembly.CurrentCrankAngleDeg;
             playAuditUnwrappedAngleDeg = 0f;
             playAuditCaptureIndex = 0;
+            playAuditChainCaptureIndex = 0;
+            playAuditChainStartTravelM = playAuditAssembly.TimingChainAccumulatedTravelM;
+            playAuditPreviousChainMarkerPosition = playAuditChainMarker.localPosition;
+            playAuditMaximumChainFrameStepM = 0f;
             playAuditStartTime = EditorApplication.timeSinceStartup;
             EditorApplication.playModeStateChanged -= OnPlayAuditModeChanged;
             EditorApplication.playModeStateChanged += OnPlayAuditModeChanged;
             CapturePlayAuditFrame(0);
             playAuditCaptureIndex = 1;
+            CaptureTimingChainAuditFrame(0);
+            playAuditChainCaptureIndex = 1;
         }
 
         private static void UpdatePlayAudit()
@@ -232,6 +269,14 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
                 if (deltaDeg < 90f) playAuditUnwrappedAngleDeg += deltaDeg;
                 playAuditLastAngleDeg = currentAngleDeg;
 
+                float chainFrameStepM = Vector3.Distance(
+                    playAuditPreviousChainMarkerPosition, playAuditChainMarker.localPosition);
+                playAuditMaximumChainFrameStepM = Mathf.Max(playAuditMaximumChainFrameStepM, chainFrameStepM);
+                Require(chainFrameStepM <= 0.015f,
+                    $"Moving timing-chain marker snapped {chainFrameStepM:R} m between rendered frames.");
+                playAuditPreviousChainMarkerPosition = playAuditChainMarker.localPosition;
+                double chainTravelM = playAuditAssembly.TimingChainAccumulatedTravelM - playAuditChainStartTravelM;
+
                 for (int index = 0; index < playAuditValves.Length; index++)
                 {
                     Vector3 renderedHeadSeat = ToAssemblyLocal(playAuditAssembly,
@@ -242,7 +287,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
                     // A valve event can cross the 720/0 boundary, so closed and peak
                     // observations are intentionally order-independent within the cycle.
                     if (displacementM <= playAuditAssembly.MaximumValveLiftM * 0.01f)
-                        playAuditSawClosed[index] = true;
+                        playAuditSawClosedAfterPeak[index] = true;
                 }
 
                 while (playAuditCaptureIndex < PlayAuditCaptureAnglesDeg.Length
@@ -252,10 +297,20 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
                     playAuditCaptureIndex++;
                 }
 
-                if (playAuditUnwrappedAngleDeg >= 720f)
+                while (playAuditChainCaptureIndex < PlayAuditChainCaptureFractions.Length
+                       && chainTravelM >= playAuditAssembly.TimingChainLengthM
+                                          * PlayAuditChainCaptureFractions[playAuditChainCaptureIndex])
+                {
+                    CaptureTimingChainAuditFrame(Mathf.RoundToInt(
+                        PlayAuditChainCaptureFractions[playAuditChainCaptureIndex] * 100f));
+                    playAuditChainCaptureIndex++;
+                }
+
+                if (playAuditUnwrappedAngleDeg >= 720f
+                    && chainTravelM >= playAuditAssembly.TimingChainLengthM)
                 {
                     for (int index = 0; index < playAuditSawPeak.Length; index++)
-                        Require(playAuditSawPeak[index] && playAuditSawClosed[index],
+                        Require(playAuditSawPeak[index] && playAuditSawClosedAfterPeak[index],
                             $"Rendered valve {index + 1} did not visibly open and close during the continuous Play Mode cycle.");
                     SessionState.SetBool(PlayAuditActiveKey + ".Succeeded", true);
                     SessionState.SetInt(PlayAuditPhaseKey, 3);
@@ -265,8 +320,8 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
                     return;
                 }
 
-                Require(EditorApplication.timeSinceStartup - playAuditStartTime < 20.0,
-                    "Play Mode 720-degree audit exceeded its time limit.");
+                Require(EditorApplication.timeSinceStartup - playAuditStartTime < 45.0,
+                    "Play Mode timing-drive audit exceeded its time limit.");
             }
             catch (Exception exception)
             {
@@ -307,6 +362,50 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
             }
             finally
             {
+                camera.targetTexture = previousTarget;
+                RenderTexture.active = previousActive;
+                UnityEngine.Object.DestroyImmediate(texture);
+                RenderTexture.ReleaseTemporary(target);
+            }
+        }
+
+        private static void CaptureTimingChainAuditFrame(int progressPercent)
+        {
+            Camera camera = Camera.main != null ? Camera.main : UnityEngine.Object.FindAnyObjectByType<Camera>();
+            Require(camera != null, "Timing-chain Play Mode audit has no camera.");
+            EngineLabInspectionCamera inspectionCamera = camera.GetComponent<EngineLabInspectionCamera>();
+            EngineInspectionMode previousMode = playAuditAssembly.InspectionMode;
+            playAuditAssembly.SetInspectionMode(EngineInspectionMode.ValvetrainOnly);
+            if (inspectionCamera != null)
+            {
+                inspectionCamera.SetPivot(playAuditAssembly.transform.TransformPoint(
+                    new Vector3(playAuditAssembly.TimingDrivePlaneXM,
+                        playAuditAssembly.IntakeCamshaftAxisLocal.y * 0.50f, 0f)));
+                inspectionCamera.SetOrbit(90f, 3f);
+                inspectionCamera.SetDistance(0.36f);
+            }
+
+            const int width = 1280;
+            const int height = 720;
+            RenderTexture target = RenderTexture.GetTemporary(width, height, 24, RenderTextureFormat.ARGB32);
+            RenderTexture previousTarget = camera.targetTexture;
+            RenderTexture previousActive = RenderTexture.active;
+            var texture = new Texture2D(width, height, TextureFormat.RGB24, false);
+            try
+            {
+                camera.targetTexture = target;
+                camera.Render();
+                RenderTexture.active = target;
+                texture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+                texture.Apply();
+                string path = Path.GetFullPath(Path.Combine(Application.dataPath,
+                    $"../Logs/EngineLabTimingChainLoop_{progressPercent:000}.png"));
+                Directory.CreateDirectory(Path.GetDirectoryName(path));
+                File.WriteAllBytes(path, texture.EncodeToPNG());
+            }
+            finally
+            {
+                playAuditAssembly.SetInspectionMode(previousMode);
                 camera.targetTexture = previousTarget;
                 RenderTexture.active = previousActive;
                 UnityEngine.Object.DestroyImmediate(texture);
@@ -828,6 +927,38 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
             Require(Mathf.Abs(crankCentre.x - intakeCentre.x) <= PositionToleranceM
                     && Mathf.Abs(crankCentre.x - exhaustCentre.x) <= PositionToleranceM,
                 "Timing sprockets are not coplanar.");
+
+            Require(visualAssembly.TimingChainSprocketContactCount == 3,
+                "The closed timing chain must define crank, intake-cam, and exhaust-cam wrap contacts.");
+            Require(visualAssembly.TimingChainLengthM > 0.25f,
+                "The timing-chain loop is missing or implausibly short.");
+            for (int sprocket = 0; sprocket < visualAssembly.TimingChainSprocketContactCount; sprocket++)
+            {
+                float wrapAngleDeg = visualAssembly.GetTimingChainWrapAngleDeg(sprocket);
+                Require(wrapAngleDeg >= 45f && wrapAngleDeg <= 240f,
+                    $"Timing sprocket {sprocket + 1} has an implausible {wrapAngleDeg:R}-degree chain wrap.");
+                Require(visualAssembly.GetTimingChainTangencyError(sprocket) <= 0.0001f,
+                    $"Timing sprocket {sprocket + 1} chain entry/exit is not tangent to its pitch circle.");
+                Require(visualAssembly.GetTimingChainSeatingErrorM(sprocket) <= PositionToleranceM,
+                    $"Timing sprocket {sprocket + 1} chain contact does not sit on its pitch circle.");
+            }
+
+            float chainLengthM = visualAssembly.TimingChainLengthM;
+            float seamProbeM = Mathf.Min(chainLengthM * 0.0001f, 0.00005f);
+            Vector3 beforeSeam = visualAssembly.SampleTimingChainPositionLocal(chainLengthM - seamProbeM);
+            Vector3 afterSeam = visualAssembly.SampleTimingChainPositionLocal(chainLengthM + seamProbeM);
+            Require(Vector3.Distance(beforeSeam, afterSeam) <= seamProbeM * 2.2f,
+                "Timing-chain path has a positional discontinuity at its closed-loop seam.");
+            Vector3 beforeTangent = visualAssembly.SampleTimingChainTangentLocal(chainLengthM - seamProbeM);
+            Vector3 afterTangent = visualAssembly.SampleTimingChainTangentLocal(chainLengthM + seamProbeM);
+            Require(Vector3.Dot(beforeTangent, afterTangent) >= 0.97f,
+                "Timing-chain path changes direction discontinuously at its closed-loop seam.");
+
+            float originalAngleDeg = visualAssembly.CurrentCrankAngleDeg;
+            visualAssembly.SetCrankAngleDeg(originalAngleDeg + 73f);
+            Require(Mathf.Abs(visualAssembly.TimingChainLengthM - chainLengthM) <= PositionToleranceM,
+                "Timing-chain path length changed while the drive animated.");
+            visualAssembly.SetCrankAngleDeg(originalAngleDeg);
         }
 
         private static Vector3 ToAssemblyLocal(InlineFourVisualFidelityAssembly visualAssembly, Vector3 worldPosition)

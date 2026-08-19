@@ -19,7 +19,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
         [SerializeField, Min(8)] private int crankSprocketTeeth = 24;
         [SerializeField, Min(16)] private int camSprocketTeeth = 48;
         [SerializeField, Min(0.001f)] private float visualChainThicknessM = 0.0045f;
-        [SerializeField, Range(12, 48)] private int movingMarkerCount = 28;
+        [SerializeField, Range(36, 96)] private int movingMarkerCount = 64;
 
         public TimingDriveType DriveType => driveType;
         public int CrankSprocketTeeth => crankSprocketTeeth;
@@ -33,7 +33,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             crankSprocketTeeth = Mathf.Max(8, crankSprocketTeeth);
             camSprocketTeeth = Mathf.Max(16, camSprocketTeeth);
             visualChainThicknessM = Mathf.Max(0.001f, visualChainThicknessM);
-            movingMarkerCount = Mathf.Clamp(movingMarkerCount, 12, 48);
+            movingMarkerCount = Mathf.Clamp(movingMarkerCount, 36, 96);
         }
     }
 
@@ -59,6 +59,11 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
         private float[] timingChainCumulativeLengthM;
         private float timingChainLengthM;
         private float crankTimingSprocketRadiusM;
+        private TimingChainTangentSpan[] timingChainTangentSpans;
+        private TimingChainWrapContact[] timingChainWrapContacts;
+        private double timingChainAccumulatedTravelM;
+        private float timingChainLastCrankAngleDeg;
+        private bool timingChainMotionInitialized;
         private Transform[] intakeValves;
         private Transform[] exhaustValves;
         private Transform[] intakeSprings;
@@ -92,10 +97,60 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
         public float ExhaustCamAngleDeg { get; private set; }
         public TimingDriveType ActiveTimingDriveType => timingDriveDefinition?.DriveType ?? TimingDriveType.Chain;
         public float TimingCamToCrankSpeedRatio => timingDriveDefinition?.CamToCrankSpeedRatio ?? 0.5f;
+        public float TimingChainLengthM => timingChainLengthM;
+        public double TimingChainAccumulatedTravelM => timingChainAccumulatedTravelM;
+        public int TimingChainSprocketContactCount => timingChainWrapContacts?.Length ?? 0;
 
         public double GetNormalizedValveLift(int cylinderIndex, ValveSide side)
         {
             return ValveTimingKinematics.NormalizedValveLift(CurrentCrankAngleDeg, cylinderIndex, side);
+        }
+
+        public float GetTimingChainWrapAngleDeg(int sprocketIndex)
+        {
+            if (timingChainWrapContacts == null
+                || sprocketIndex < 0
+                || sprocketIndex >= timingChainWrapContacts.Length) return 0f;
+            return timingChainWrapContacts[sprocketIndex].WrapAngleDeg;
+        }
+
+        public float GetTimingChainTangencyError(int sprocketIndex)
+        {
+            if (timingChainWrapContacts == null
+                || timingChainTangentSpans == null
+                || sprocketIndex < 0
+                || sprocketIndex >= timingChainWrapContacts.Length) return float.PositiveInfinity;
+            TimingChainWrapContact contact = timingChainWrapContacts[sprocketIndex];
+            TimingChainTangentSpan incoming = timingChainTangentSpans[
+                (sprocketIndex - 1 + timingChainTangentSpans.Length) % timingChainTangentSpans.Length];
+            TimingChainTangentSpan outgoing = timingChainTangentSpans[sprocketIndex];
+            Vector2 incomingRadial = (contact.IncomingZy - contact.CentreZy).normalized;
+            Vector2 outgoingRadial = (contact.OutgoingZy - contact.CentreZy).normalized;
+            return Mathf.Max(
+                Mathf.Abs(Vector2.Dot(incomingRadial, incoming.DirectionZy)),
+                Mathf.Abs(Vector2.Dot(outgoingRadial, outgoing.DirectionZy)));
+        }
+
+        public float GetTimingChainSeatingErrorM(int sprocketIndex)
+        {
+            if (timingChainWrapContacts == null
+                || sprocketIndex < 0
+                || sprocketIndex >= timingChainWrapContacts.Length) return float.PositiveInfinity;
+            TimingChainWrapContact contact = timingChainWrapContacts[sprocketIndex];
+            return Mathf.Max(
+                Mathf.Abs(Vector2.Distance(contact.CentreZy, contact.IncomingZy) - contact.RadiusM),
+                Mathf.Abs(Vector2.Distance(contact.CentreZy, contact.OutgoingZy) - contact.RadiusM));
+        }
+
+        public Vector3 SampleTimingChainPositionLocal(float distanceM)
+        {
+            return SampleTimingChainPath(distanceM, out _);
+        }
+
+        public Vector3 SampleTimingChainTangentLocal(float distanceM)
+        {
+            SampleTimingChainPath(distanceM, out Vector3 tangent);
+            return tangent;
         }
 
         public FourStrokePhase GetCylinderPhase(int cylinderIndex)
@@ -117,6 +172,58 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             public int ValveIndex { get; }
             public ValveSide Side { get; }
             public Vector3[] Path { get; }
+        }
+
+        private readonly struct TimingChainCircle
+        {
+            public TimingChainCircle(Vector2 centreZy, float radiusM)
+            {
+                CentreZy = centreZy;
+                RadiusM = radiusM;
+            }
+
+            public Vector2 CentreZy { get; }
+            public float RadiusM { get; }
+        }
+
+        private readonly struct TimingChainTangentSpan
+        {
+            public TimingChainTangentSpan(int fromSprocket, int toSprocket, Vector2 startZy, Vector2 endZy)
+            {
+                FromSprocket = fromSprocket;
+                ToSprocket = toSprocket;
+                StartZy = startZy;
+                EndZy = endZy;
+            }
+
+            public int FromSprocket { get; }
+            public int ToSprocket { get; }
+            public Vector2 StartZy { get; }
+            public Vector2 EndZy { get; }
+            public Vector2 DirectionZy => (EndZy - StartZy).normalized;
+        }
+
+        private readonly struct TimingChainWrapContact
+        {
+            public TimingChainWrapContact(
+                Vector2 centreZy,
+                float radiusM,
+                Vector2 incomingZy,
+                Vector2 outgoingZy,
+                float wrapAngleDeg)
+            {
+                CentreZy = centreZy;
+                RadiusM = radiusM;
+                IncomingZy = incomingZy;
+                OutgoingZy = outgoingZy;
+                WrapAngleDeg = wrapAngleDeg;
+            }
+
+            public Vector2 CentreZy { get; }
+            public float RadiusM { get; }
+            public Vector2 IncomingZy { get; }
+            public Vector2 OutgoingZy { get; }
+            public float WrapAngleDeg { get; }
         }
 
         private void CreateCylinderBlock()
@@ -963,27 +1070,22 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             timingChainPath = BuildTimingChainPath(x, crankTimingSprocketRadiusM, camSprocketRadiusM);
             Mesh chainMesh = TrackMesh(ProceduralEngineMeshFactory.CreateTubeAlongPath(
                 "Reduced timing chain path mesh", timingChainPath,
-                timingDriveDefinition.VisualChainThicknessM, 8, false, false,
+                timingDriveDefinition.VisualChainThicknessM, 10, false, true,
                 timingDriveDefinition.VisualChainThicknessM * 0.72f));
             CreateMeshPart("Continuous timing chain path", timingDriveGroup, chainMesh,
                 Vector3.zero, Quaternion.identity, chainMaterial, null);
-            CreateSweptPart("Fixed timing-chain guide", timingDriveGroup,
-                new[] { timingChainPath[1], timingChainPath[2], timingChainPath[3] },
-                boreM * 0.025f, boreM * 0.013f, gasketMaterial, null);
-            CreateSweptPart("Tensioning timing-chain guide", timingDriveGroup,
-                new[] { timingChainPath[7], timingChainPath[8], timingChainPath[9] },
-                boreM * 0.025f, boreM * 0.013f, gasketMaterial, null);
-            CreateCylinderBetween("Hydraulic chain tensioner", timingDriveGroup,
-                timingChainPath[8] + new Vector3(-boreM * 0.03f, -boreM * 0.03f, boreM * 0.02f),
-                timingChainPath[8] + new Vector3(-boreM * 0.03f, boreM * 0.08f, boreM * 0.02f),
-                boreM * 0.035f, machinedSteelMaterial, null);
+            CreateTimingChainGuidesAndTensioner(x);
 
             CalculateTimingChainLengths();
             timingChainMarkers = new Transform[timingDriveDefinition.MovingMarkerCount];
+            float markerSpacingM = timingChainLengthM / timingChainMarkers.Length;
             for (int marker = 0; marker < timingChainMarkers.Length; marker++)
             {
                 Transform link = CreateEllipsoid($"Moving timing-chain marker {marker + 1}", timingDriveGroup,
-                    timingChainPath[0], new Vector3(boreM * 0.040f, boreM * 0.025f, boreM * 0.018f),
+                    timingChainPath[0], new Vector3(
+                        timingDriveDefinition.VisualChainThicknessM * 1.15f,
+                        timingDriveDefinition.VisualChainThicknessM * 0.90f,
+                        Mathf.Min(markerSpacingM * 0.72f, boreM * 0.045f)),
                     bearingMaterial, null);
                 timingChainMarkers[marker] = link;
             }
@@ -1013,20 +1115,132 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
 
         private Vector3[] BuildTimingChainPath(float x, float crankRadius, float camRadius)
         {
-            return new[]
+            // Construct the closed pitch line from common external tangents and
+            // counter-clockwise sprocket arcs. Unlike the former hand-authored
+            // polygon, every straight run meets its sprocket tangentially.
+            var circles = new[]
             {
-                new Vector3(x, -crankRadius, 0f),
-                new Vector3(x, -crankRadius * 0.35f, exhaustCamZM - crankRadius * 0.92f),
-                new Vector3(x, camshaftYM - camRadius * 0.72f, exhaustCamZM - camRadius * 0.74f),
-                new Vector3(x, camshaftYM, exhaustCamZM - camRadius),
-                new Vector3(x, camshaftYM + camRadius, exhaustCamZM),
-                new Vector3(x, camshaftYM + camRadius * 1.08f, 0f),
-                new Vector3(x, camshaftYM + camRadius, intakeCamZM),
-                new Vector3(x, camshaftYM, intakeCamZM + camRadius),
-                new Vector3(x, camshaftYM - camRadius * 0.72f, intakeCamZM + camRadius * 0.74f),
-                new Vector3(x, -crankRadius * 0.35f, intakeCamZM + crankRadius * 0.92f),
-                new Vector3(x, -crankRadius, 0f)
+                new TimingChainCircle(Vector2.zero, crankRadius),
+                new TimingChainCircle(new Vector2(intakeCamZM, camshaftYM), camRadius),
+                new TimingChainCircle(new Vector2(exhaustCamZM, camshaftYM), camRadius)
             };
+
+            timingChainTangentSpans = new TimingChainTangentSpan[circles.Length];
+            for (int sprocket = 0; sprocket < circles.Length; sprocket++)
+            {
+                int next = (sprocket + 1) % circles.Length;
+                timingChainTangentSpans[sprocket] = CalculateExternalTangent(
+                    sprocket, next, circles[sprocket], circles[next]);
+            }
+
+            timingChainWrapContacts = new TimingChainWrapContact[circles.Length];
+            for (int sprocket = 0; sprocket < circles.Length; sprocket++)
+            {
+                TimingChainTangentSpan incomingSpan = timingChainTangentSpans[
+                    (sprocket - 1 + circles.Length) % circles.Length];
+                TimingChainTangentSpan outgoingSpan = timingChainTangentSpans[sprocket];
+                Vector2 incomingRadial = incomingSpan.EndZy - circles[sprocket].CentreZy;
+                Vector2 outgoingRadial = outgoingSpan.StartZy - circles[sprocket].CentreZy;
+                float incomingAngleRad = Mathf.Atan2(incomingRadial.y, incomingRadial.x);
+                float outgoingAngleRad = Mathf.Atan2(outgoingRadial.y, outgoingRadial.x);
+                float wrapAngleRad = Mathf.Repeat(outgoingAngleRad - incomingAngleRad, Mathf.PI * 2f);
+                timingChainWrapContacts[sprocket] = new TimingChainWrapContact(
+                    circles[sprocket].CentreZy,
+                    circles[sprocket].RadiusM,
+                    incomingSpan.EndZy,
+                    outgoingSpan.StartZy,
+                    wrapAngleRad * Mathf.Rad2Deg);
+            }
+
+            var path = new List<Vector3>(80);
+            for (int spanIndex = 0; spanIndex < timingChainTangentSpans.Length; spanIndex++)
+            {
+                TimingChainTangentSpan span = timingChainTangentSpans[spanIndex];
+                if (path.Count == 0) path.Add(TimingPlanePoint(x, span.StartZy));
+                path.Add(TimingPlanePoint(x, span.EndZy));
+
+                int wrappedSprocket = span.ToSprocket;
+                TimingChainWrapContact contact = timingChainWrapContacts[wrappedSprocket];
+                float startAngleRad = Mathf.Atan2(
+                    contact.IncomingZy.y - contact.CentreZy.y,
+                    contact.IncomingZy.x - contact.CentreZy.x);
+                int arcSegments = Mathf.Max(6, Mathf.CeilToInt(contact.WrapAngleDeg / 7.5f));
+                int finalSegment = wrappedSprocket == 0 ? arcSegments - 1 : arcSegments;
+                for (int segment = 1; segment <= finalSegment; segment++)
+                {
+                    float angleRad = startAngleRad
+                                     + contact.WrapAngleDeg * Mathf.Deg2Rad * segment / arcSegments;
+                    Vector2 pointZy = contact.CentreZy + new Vector2(
+                        Mathf.Cos(angleRad), Mathf.Sin(angleRad)) * contact.RadiusM;
+                    path.Add(TimingPlanePoint(x, pointZy));
+                }
+            }
+
+            return path.ToArray();
+        }
+
+        private static TimingChainTangentSpan CalculateExternalTangent(
+            int fromSprocket,
+            int toSprocket,
+            TimingChainCircle from,
+            TimingChainCircle to)
+        {
+            Vector2 centreDelta = to.CentreZy - from.CentreZy;
+            float centreDistanceM = centreDelta.magnitude;
+            if (centreDistanceM <= Mathf.Abs(from.RadiusM - to.RadiusM) + 0.000001f)
+                throw new InvalidOperationException("Timing sprockets do not admit a common external tangent.");
+
+            Vector2 axis = centreDelta / centreDistanceM;
+            Vector2 leftNormal = new Vector2(-axis.y, axis.x);
+            float radiusRatio = (from.RadiusM - to.RadiusM) / centreDistanceM;
+            float perpendicularScale = Mathf.Sqrt(Mathf.Max(0f, 1f - radiusRatio * radiusRatio));
+            Vector2 outwardNormal = axis * radiusRatio - leftNormal * perpendicularScale;
+            return new TimingChainTangentSpan(
+                fromSprocket,
+                toSprocket,
+                from.CentreZy + outwardNormal * from.RadiusM,
+                to.CentreZy + outwardNormal * to.RadiusM);
+        }
+
+        private void CreateTimingChainGuidesAndTensioner(float x)
+        {
+            CreateTimingChainGuide("Fixed timing-chain guide", x, timingChainTangentSpans[2], false);
+            Vector3 tensionGuideMidpoint = CreateTimingChainGuide(
+                "Tensioning timing-chain guide", x, timingChainTangentSpans[0], true);
+
+            Vector2 spanDirection = timingChainTangentSpans[0].DirectionZy;
+            Vector2 inwardNormal = new Vector2(-spanDirection.y, spanDirection.x);
+            Vector3 inward = new Vector3(0f, inwardNormal.y, inwardNormal.x);
+            CreateCylinderBetween("Hydraulic chain tensioner", timingDriveGroup,
+                tensionGuideMidpoint + inward * boreM * 0.12f,
+                tensionGuideMidpoint + inward * boreM * 0.025f,
+                boreM * 0.035f, machinedSteelMaterial, null);
+        }
+
+        private Vector3 CreateTimingChainGuide(
+            string name,
+            float x,
+            TimingChainTangentSpan span,
+            bool bowed)
+        {
+            Vector2 direction = span.DirectionZy;
+            Vector2 inwardNormal = new Vector2(-direction.y, direction.x);
+            float chainClearanceM = timingDriveDefinition.VisualChainThicknessM * 1.15f;
+            Vector2 start = Vector2.Lerp(span.StartZy, span.EndZy, 0.18f)
+                            + inwardNormal * chainClearanceM;
+            Vector2 end = Vector2.Lerp(span.StartZy, span.EndZy, 0.82f)
+                          + inwardNormal * chainClearanceM;
+            Vector2 middle = (start + end) * 0.5f
+                             + inwardNormal * (bowed ? boreM * 0.010f : boreM * 0.004f);
+            CreateSweptPart(name, timingDriveGroup,
+                new[] { TimingPlanePoint(x, start), TimingPlanePoint(x, middle), TimingPlanePoint(x, end) },
+                boreM * 0.025f, boreM * 0.013f, gasketMaterial, null);
+            return TimingPlanePoint(x, middle);
+        }
+
+        private static Vector3 TimingPlanePoint(float x, Vector2 pointZy)
+        {
+            return new Vector3(x, pointZy.y, pointZy.x);
         }
 
         private void CreateFrontTimingCoverV2()
@@ -1136,8 +1350,37 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
                 exhaustCamSprocket.localRotation = Quaternion.Euler(ExhaustCamAngleDeg, 0f, 0f);
             if (timingChainMarkers == null || timingChainLengthM <= 0f) return;
 
-            float chainTravelM = Mathf.Repeat(crankCycleAngleDeg, 360f) / 360f
-                                 * (Mathf.PI * 2f * crankTimingSprocketRadiusM);
+            float normalizedCrankAngleDeg = Mathf.Repeat(crankCycleAngleDeg, 720f);
+            if (!timingChainMotionInitialized)
+            {
+                timingChainAccumulatedTravelM = normalizedCrankAngleDeg * Mathf.Deg2Rad
+                                                * crankTimingSprocketRadiusM;
+                timingChainMotionInitialized = true;
+            }
+            else if (Application.isPlaying && animateInPlayMode)
+            {
+                float deltaCrankAngleDeg = Mathf.Repeat(
+                    normalizedCrankAngleDeg - timingChainLastCrankAngleDeg, 720f);
+                if (deltaCrankAngleDeg < 90f)
+                {
+                    timingChainAccumulatedTravelM += deltaCrankAngleDeg * Mathf.Deg2Rad
+                                                     * crankTimingSprocketRadiusM;
+                }
+                else
+                {
+                    // Large changes are explicit scrubs rather than animation frames.
+                    timingChainAccumulatedTravelM = normalizedCrankAngleDeg * Mathf.Deg2Rad
+                                                    * crankTimingSprocketRadiusM;
+                }
+            }
+            else
+            {
+                timingChainAccumulatedTravelM = normalizedCrankAngleDeg * Mathf.Deg2Rad
+                                                * crankTimingSprocketRadiusM;
+            }
+            timingChainLastCrankAngleDeg = normalizedCrankAngleDeg;
+
+            float chainTravelM = Mathf.Repeat((float)timingChainAccumulatedTravelM, timingChainLengthM);
             for (int marker = 0; marker < timingChainMarkers.Length; marker++)
             {
                 if (timingChainMarkers[marker] == null) continue;
@@ -1215,6 +1458,11 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             timingChainPath = null;
             timingChainCumulativeLengthM = null;
             timingChainLengthM = 0f;
+            timingChainTangentSpans = null;
+            timingChainWrapContacts = null;
+            timingChainAccumulatedTravelM = 0.0;
+            timingChainLastCrankAngleDeg = 0f;
+            timingChainMotionInitialized = false;
             intakeValves = null;
             exhaustValves = null;
             intakeSprings = null;
@@ -1314,12 +1562,13 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
         private void CalculateTimingChainLengths()
         {
             if (timingChainPath == null || timingChainPath.Length < 2) return;
-            timingChainCumulativeLengthM = new float[timingChainPath.Length];
+            timingChainCumulativeLengthM = new float[timingChainPath.Length + 1];
             timingChainLengthM = 0f;
-            for (int i = 1; i < timingChainPath.Length; i++)
+            for (int segment = 0; segment < timingChainPath.Length; segment++)
             {
-                timingChainLengthM += Vector3.Distance(timingChainPath[i - 1], timingChainPath[i]);
-                timingChainCumulativeLengthM[i] = timingChainLengthM;
+                int next = (segment + 1) % timingChainPath.Length;
+                timingChainLengthM += Vector3.Distance(timingChainPath[segment], timingChainPath[next]);
+                timingChainCumulativeLengthM[segment + 1] = timingChainLengthM;
             }
         }
 
@@ -1331,14 +1580,15 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
                 return Vector3.zero;
             }
             distanceM = Mathf.Repeat(distanceM, timingChainLengthM);
-            for (int i = 1; i < timingChainPath.Length; i++)
+            for (int segment = 0; segment < timingChainPath.Length; segment++)
             {
-                if (distanceM > timingChainCumulativeLengthM[i]) continue;
-                float segmentStartM = timingChainCumulativeLengthM[i - 1];
-                float segmentLengthM = timingChainCumulativeLengthM[i] - segmentStartM;
+                if (distanceM > timingChainCumulativeLengthM[segment + 1]) continue;
+                int next = (segment + 1) % timingChainPath.Length;
+                float segmentStartM = timingChainCumulativeLengthM[segment];
+                float segmentLengthM = timingChainCumulativeLengthM[segment + 1] - segmentStartM;
                 float t = segmentLengthM <= 0f ? 0f : (distanceM - segmentStartM) / segmentLengthM;
-                tangent = (timingChainPath[i] - timingChainPath[i - 1]).normalized;
-                return Vector3.Lerp(timingChainPath[i - 1], timingChainPath[i], t);
+                tangent = (timingChainPath[next] - timingChainPath[segment]).normalized;
+                return Vector3.Lerp(timingChainPath[segment], timingChainPath[next], t);
             }
             tangent = (timingChainPath[1] - timingChainPath[0]).normalized;
             return timingChainPath[0];

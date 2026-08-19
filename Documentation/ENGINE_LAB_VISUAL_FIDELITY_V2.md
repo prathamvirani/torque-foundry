@@ -96,10 +96,13 @@ The current serialized `TimingDrivePresentationDefinition` selects a chain drive
 - 48-tooth intake and exhaust sprockets/phasers
 - fixed and tensioning guides
 - a hydraulic tensioner body
-- a continuous reduced chain path and moving visual markers
+- a closed pitch-line path made from common external tangents and sampled sprocket-wrap arcs
+- at least 36 moving visual link markers driven by accumulated chain travel
 - a rounded front timing-cover volume continuous with block and head
 
-The tooth definition exposes the `0.5` cam/crank speed ratio. Belt and gear values exist as future definition types; v2 renders only the chain definition. It does not simulate individual link articulation, chain polygonal action, tension, wear, lubrication, backlash, phaser hydraulics, or torsional vibration.
+The chain centerline sits on each sprocket pitch radius, follows a nonzero arc around all three sprockets, and enters/leaves at calculated tangent points. Guides are fitted beside the two long tangent spans and the presentation tensioner acts on the movable guide side. Animated travel accumulates from crank rotation and wraps only by closed-loop path length, so crossing the teaching cycle's `720° → 0°` boundary does not reset visible marker positions. Crank-chain tangential speed equals the half-speed cam sprocket tangential speed because the cam sprocket pitch radius is twice the crank sprocket radius.
+
+The tooth definition exposes the `0.5` cam/crank speed ratio. Belt and gear values exist as future definition types; v2 renders only the chain definition. The tube and markers are a reduced visual representation: they do not simulate individual link articulation, exact chain pitch/tooth meshing, polygonal action, tension force, wear, lubrication, backlash, phaser hydraulics, or torsional vibration.
 
 ## Inspection and validity
 

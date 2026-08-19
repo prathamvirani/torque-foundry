@@ -572,7 +572,7 @@ MonoBehaviour:
     crankSprocketTeeth: 24
     camSprocketTeeth: 48
     visualChainThicknessM: 0.0045
-    movingMarkerCount: 28
+    movingMarkerCount: 36
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0

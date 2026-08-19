@@ -6,9 +6,9 @@
 
 **Active branch:** `feature/engine-lab-foundation`
 
-**Current gate:** Mechanical Alignment & Kinematic Correctness Pass completed. New feature development and Engine Lab UI work remain frozen until the user explicitly lifts the gate.
+**Current gate:** Mechanical Alignment & Kinematic Correctness Pass and Timing Drive Continuity & Wrap Correction Pass completed. New feature development and Engine Lab UI work remain frozen until the user explicitly lifts the gate.
 
-**Verification note:** On 2026-08-20, the dedicated scene passed its strengthened alignment validator in a normal licensed Unity 6000.5.8f1 editor session using D3D12. The Engine Lab root remained reset; all bore/stroke/rod-length rebuilds replaced generated meshes cleanly; the authoritative 86 × 86 × 143 mm state remained 1.9982288569 L; and actual generated transforms passed bore/piston/wrist-pin/rod/crank-pin, main-bearing, valve-seat/lift/spring/follower, port, timing-plane, and crankcase-clearance assertions. Twenty-four fixed-camera regression views were captured at 0/90/180/360/540/720 degrees. A separate continuous 720-degree Play Mode audit visually sampled every rendered intake and exhaust valve opening and closing and completed with zero red Console errors.
+**Verification note:** On 2026-08-20, the dedicated scene passed its strengthened alignment validator in a normal licensed Unity 6000.5.8f1 editor session using D3D12. The Engine Lab root remained reset; all bore/stroke/rod-length rebuilds replaced generated meshes cleanly; the authoritative 86 × 86 × 143 mm state remained 1.9982288569 L; and actual generated transforms passed bore/piston/wrist-pin/rod/crank-pin, main-bearing, valve-seat/lift/spring/follower, port, timing-plane, crankcase-clearance, and timing-chain tangency/wrap/seam assertions. Twenty-four fixed-camera regression views were captured at 0/90/180/360/540/720 degrees. A separate Play Mode audit at 30 teaching rpm visually sampled every rendered intake and exhaust valve opening and closing, followed one chain marker through a complete closed-loop circulation, captured five fixed timing-drive close-ups, measured a maximum 0.00510435458 m frame step without a reset/pop, and completed with zero red Console errors.
 
 The current milestone is to turn the initial validated engine geometry into a usable Engine Lab: a configurable reciprocating engine with authoritative pure-C# calculations and a live Unity 3D teaching/inspection presentation.
 
@@ -102,7 +102,7 @@ The active game-facing presentation now supersedes the v1 compression-box aesthe
 - four integrated cylinder-bank forms, five lower main-bay forms, main bulkheads/caps, cast ribs, core/accessory bosses, deck/bore lands, and port-side head bulges
 - eight curved intake runners/openings and eight curved exhaust runners/openings with valve bowls and optional presentation-only airflow paths
 - sixteen moving valves, visually compressing springs, phased cam lobes, and subtle four-stroke chamber highlights
-- a 24/48-tooth chain-drive definition with crank/cam sprockets, phaser forms, moving chain markers, guides, tensioner, and timing cover
+- a 24/48-tooth chain-drive definition with crank/cam sprockets, phaser forms, tangent-and-arc closed-loop wrap, continuous moving chain markers, guides, tensioner, and timing cover
 - refined high-clearance pistons, forged rods/caps, curved crank webs/counterweights, journal collars, snout/damper, flange, and flywheel
 
 Authoritative bore, stroke, rod length, cylinder spacing, crank phasing, slider-crank positions, cycle phase, and valve-lift kinematics originate in the controller/Core path. Visual proportions and validity limits are documented in `Documentation/ENGINE_LAB_VISUAL_FIDELITY_V2.md`; they never feed back into simulation state. The v1 document remains as history for the superseded prototype.
@@ -178,7 +178,7 @@ Work in this order unless the user redirects:
    - continuous rounded/tapered lofts replace the primary cube-derived block/head silhouettes
    - curved lower ladder, sump, timing case, rear flange, port bulges, cam carrier/cover, ribs, and bosses
    - traceable paired intake/chamber/exhaust paths with optional non-simulated airflow overlays
-   - deterministic moving valves/springs, half-speed cams, 720-degree firing phases, and chain timing drive
+   - deterministic moving valves/springs, half-speed cams, 720-degree firing phases, and a tangent-wrapped continuously circulating chain timing drive
    - separate generated groups retain crank/rod/piston, casting, port, timing, and valvetrain inspection access
 
 4. **Add useful inspection controls — completed**
@@ -201,7 +201,7 @@ Work in this order unless the user redirects:
 6. **Strengthen automated validation — in progress**
    - add a Unity Test Framework or similarly repeatable test path for core calculations
    - cover slider-crank endpoints and symmetry
-   - completed: editor validation for scene integrity, geometry-input rebuilds, camera limits, teaching-state isolation, and group visibility without stale presentation state
+   - completed: editor validation for scene integrity, geometry-input rebuilds, camera limits, teaching-state isolation, group visibility, timing-chain seating/tangency/closed-loop length/seam continuity, and rendered Play Mode chain motion without stale presentation state
 
 7. **Prepare basic dyno milestone**
    - only after geometry/scene/UI foundation is stable
