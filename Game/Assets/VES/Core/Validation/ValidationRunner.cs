@@ -55,7 +55,7 @@ namespace VehicleEngineeringSandbox.Core.Validation
                 10.0,
                 EngineGeometry.CompressionRatio(swept, clearance), 1e-12);
 
-            var configuration = EngineConfiguration.FromMillimetres(86.0, 86.0, 4, 10.0, 7000.0);
+            var configuration = EngineConfiguration.FromMillimetres(86.0, 86.0, 143.0, 4, 10.0, 7000.0);
             var state = EngineCalculator.Calculate(configuration);
 
             Add(report, "ENG-CALC-001", "Configuration-to-state displacement",
@@ -65,6 +65,19 @@ namespace VehicleEngineeringSandbox.Core.Validation
             Add(report, "ENG-CALC-002", "Configuration-to-state mean piston speed",
                 20.066666666666666,
                 state.MeanPistonSpeedMps, 1e-12);
+
+            Add(report, "ENG-CALC-003", "143 mm rod / 86 mm stroke ratio",
+                143.0 / 86.0,
+                state.RodStrokeRatio, 1e-12);
+
+            double crankRadiusM = 0.086 * 0.5;
+            double rodLengthM = 0.143;
+            double tdcHeightM = SliderCrankKinematics.PistonPinHeightM(0.0, crankRadiusM, rodLengthM);
+            double bdcHeightM = SliderCrankKinematics.PistonPinHeightM(Math.PI, crankRadiusM, rodLengthM);
+
+            Add(report, "ENG-KIN-001", "Slider-crank TDC-to-BDC travel equals stroke",
+                0.086,
+                tdcHeightM - bdcHeightM, 1e-12);
 
             return report;
         }
