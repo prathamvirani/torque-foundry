@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Reflection;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -17,7 +18,23 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
     {
         private const string ScenePath = "Assets/VES/EngineLab/Scenes/EngineLab.unity";
         private const string GeneratedRootName = "Generated I4 Mechanism";
+        private const string InteractiveValidationArgument = "-torqueFoundryValidateEngineLab";
+        private const string InteractiveValidationSessionKey = "TorqueFoundry.EngineLabInteractiveValidationRan";
         private const float PositionToleranceM = 0.00001f;
+
+        [InitializeOnLoadMethod]
+        private static void ScheduleRequestedInteractiveValidation()
+        {
+            if (Application.isBatchMode
+                || SessionState.GetBool(InteractiveValidationSessionKey, false)
+                || Array.IndexOf(Environment.GetCommandLineArgs(), InteractiveValidationArgument) < 0)
+            {
+                return;
+            }
+
+            SessionState.SetBool(InteractiveValidationSessionKey, true);
+            EditorApplication.delayCall += RunRequestedInteractiveValidation;
+        }
 
         [MenuItem("Torque Foundry/Validate Engine Lab Scene")]
         public static void RunFromMenu()
@@ -25,6 +42,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
             try
             {
                 string report = ValidateScene();
+                WriteReport(report);
                 Debug.Log(report);
             }
             catch (Exception exception)
@@ -49,6 +67,33 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
                 WriteReport(report);
                 Debug.LogError(report);
                 EditorApplication.Exit(1);
+            }
+        }
+
+        private static void RunRequestedInteractiveValidation()
+        {
+            try
+            {
+                ClearConsole();
+                Require(EditorApplication.ExecuteMenuItem("Torque Foundry/Validate Engine Lab Scene"),
+                    "Engine Lab validation menu command could not be executed.");
+
+                int consoleErrorCount = GetConsoleErrorCount();
+                Require(consoleErrorCount == 0,
+                    $"Unity Console contained {consoleErrorCount} red error(s) after scene validation.");
+
+                string screenshotPath = CaptureInspectionScreenshot();
+                AppendReport($"Interactive editor verification PASSED: Console red errors = 0.\n"
+                             + $"Inspection screenshot: {screenshotPath}");
+                Debug.Log("Interactive Engine Lab verification PASSED: validator passed and Console has zero red errors.");
+                EditorApplication.delayCall += () => EditorApplication.Exit(0);
+            }
+            catch (Exception exception)
+            {
+                string report = $"Interactive Engine Lab verification FAILED: {exception}";
+                WriteReport(report);
+                Debug.LogError(report);
+                EditorApplication.delayCall += () => EditorApplication.Exit(1);
             }
         }
 
@@ -170,8 +215,9 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
                 crankRadiusM,
                 rodLengthM);
 
-            Require(Mathf.Abs((piston2.localPosition.x - piston1.localPosition.x) - expectedSpacingM) <= PositionToleranceM,
-                "Cylinder spacing did not rebuild from bore.");
+            float actualSpacingM = piston2.localPosition.x - piston1.localPosition.x;
+            Require(Mathf.Abs(actualSpacingM - expectedSpacingM) <= PositionToleranceM,
+                $"Cylinder spacing did not rebuild from bore: expected {expectedSpacingM:R} m, actual {actualSpacingM:R} m.");
             Require(Mathf.Abs(piston1.localScale.x - boreM * 0.90f) <= PositionToleranceM,
                 "Piston diameter did not rebuild from bore.");
             Require(Mathf.Abs(piston1.localPosition.y - expectedPistonPinYM) <= PositionToleranceM,
@@ -229,7 +275,6 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
 
         private static void SetFloat(SerializedObject serializedObject, string propertyName, float value)
         {
-            serializedObject.Update();
             SerializedProperty property = serializedObject.FindProperty(propertyName);
             Require(property != null, $"Serialized property '{propertyName}' was not found.");
             property.floatValue = value;
@@ -255,6 +300,70 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
             string reportPath = Path.GetFullPath(Path.Combine(Application.dataPath, "../Temp/EngineLabSceneValidation.txt"));
             Directory.CreateDirectory(Path.GetDirectoryName(reportPath));
             File.WriteAllText(reportPath, report + Environment.NewLine, System.Text.Encoding.UTF8);
+        }
+
+        private static void AppendReport(string report)
+        {
+            string reportPath = Path.GetFullPath(Path.Combine(Application.dataPath, "../Temp/EngineLabSceneValidation.txt"));
+            File.AppendAllText(reportPath, report + Environment.NewLine, System.Text.Encoding.UTF8);
+        }
+
+        private static void ClearConsole()
+        {
+            Type logEntriesType = typeof(UnityEditor.Editor).Assembly.GetType("UnityEditor.LogEntries");
+            MethodInfo clearMethod = logEntriesType?.GetMethod(
+                "Clear",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            Require(clearMethod != null, "Unity Console clear API was unavailable.");
+            clearMethod.Invoke(null, null);
+        }
+
+        private static int GetConsoleErrorCount()
+        {
+            Type logEntriesType = typeof(UnityEditor.Editor).Assembly.GetType("UnityEditor.LogEntries");
+            MethodInfo countMethod = logEntriesType?.GetMethod(
+                "GetCountsByType",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            Require(countMethod != null, "Unity Console count API was unavailable.");
+
+            object[] counts = { 0, 0, 0 };
+            countMethod.Invoke(null, counts);
+            return (int)counts[0];
+        }
+
+        private static string CaptureInspectionScreenshot()
+        {
+            Camera camera = Camera.main != null ? Camera.main : UnityEngine.Object.FindAnyObjectByType<Camera>();
+            Require(camera != null, "Dedicated Engine Lab scene has no inspection camera.");
+
+            const int width = 1280;
+            const int height = 720;
+            RenderTexture renderTexture = RenderTexture.GetTemporary(width, height, 24, RenderTextureFormat.ARGB32);
+            RenderTexture previousActive = RenderTexture.active;
+            RenderTexture previousTarget = camera.targetTexture;
+            var texture = new Texture2D(width, height, TextureFormat.RGB24, false);
+
+            try
+            {
+                camera.targetTexture = renderTexture;
+                camera.Render();
+                RenderTexture.active = renderTexture;
+                texture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+                texture.Apply();
+
+                string screenshotPath = Path.GetFullPath(
+                    Path.Combine(Application.dataPath, "../Logs/EngineLabInteractiveValidation.png"));
+                Directory.CreateDirectory(Path.GetDirectoryName(screenshotPath));
+                File.WriteAllBytes(screenshotPath, texture.EncodeToPNG());
+                return screenshotPath;
+            }
+            finally
+            {
+                camera.targetTexture = previousTarget;
+                RenderTexture.active = previousActive;
+                UnityEngine.Object.DestroyImmediate(texture);
+                RenderTexture.ReleaseTemporary(renderTexture);
+            }
         }
     }
 }

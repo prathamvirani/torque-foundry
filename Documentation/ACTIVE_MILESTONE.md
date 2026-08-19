@@ -6,7 +6,7 @@
 
 **Active branch:** `feature/engine-lab-foundation`
 
-**Verification note:** The dedicated scene has a repeatable editor verifier, but the latest unattended Unity batch attempt was blocked before project execution by the local Unity Licensing Client repeatedly losing its channel. Source compilation and pure-C# validation can still be run independently; the scene verifier must be rerun once the editor has a working licensed session.
+**Verification note:** On 2026-08-20, the dedicated scene passed `Torque Foundry → Validate Engine Lab Scene` in a normal licensed Unity 6000.5.8f1 editor session using D3D12. The scene opened cleanly, the Engine Lab root remained reset, all bore/stroke/rod-length rebuild cases passed, the Console had zero red errors, and a rendered inspection view confirmed the cutaway block/head context did not obscure the crank, rods, pistons, or liners.
 
 The current milestone is to turn the initial validated engine geometry into a usable Engine Lab: a configurable reciprocating engine with authoritative pure-C# calculations and a live Unity 3D teaching/inspection presentation.
 
@@ -67,6 +67,8 @@ Foundation reference cases cover displacement, mean piston speed, compression-ra
 `Game/Assets/VES/EngineLab/Editor/EngineLabSceneValidation.cs`
 
 The repeatable editor validation opens the dedicated scene, checks its root transform and script references, and exercises bore/stroke/rod-length changes to confirm the mechanism and context replace their generated hierarchies without stale state.
+
+The same verifier has also been run successfully from its normal editor menu command, with zero red Console errors and a captured inspection-camera view for visual review.
 
 ### Unity adapter
 
