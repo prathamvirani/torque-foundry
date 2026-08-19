@@ -24,9 +24,16 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
 
         [Header("Presentation Geometry")]
         [SerializeField, Min(1.01f)] private float cylinderSpacingBoreMultiplier = 1.15f;
+
+        [Header("Inspection Visibility")]
+        [SerializeField] private bool showRotatingAssembly = true;
+        [SerializeField] private bool showPistonsAndRods = true;
         [SerializeField] private bool showBoreGuides = true;
 
         private Transform generatedRoot;
+        private Transform rotatingAssemblyGroup;
+        private Transform pistonsAndRodsGroup;
+        private Transform boreGuidesGroup;
         private Transform[] pistons;
         private Transform[] wristPins;
         private Transform[] connectingRods;
@@ -40,7 +47,6 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
         private float lastRodLengthMm = -1f;
         private int lastCylinderCount = -1;
         private float lastSpacingMultiplier = -1f;
-        private bool lastShowBoreGuides;
         private bool rebuildRequested = true;
         private float animatedCrankAngleDeg;
 
@@ -50,6 +56,54 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
         private Material guideMaterial;
 
         public float CylinderSpacingBoreMultiplier => cylinderSpacingBoreMultiplier;
+        public bool IsTeachingAnimationPlaying => animateInPlayMode;
+        public float TeachingAnimationRpm => teachingAnimationRpm;
+        public float CurrentCrankAngleDeg => Application.isPlaying && animateInPlayMode
+            ? animatedCrankAngleDeg
+            : previewCrankAngleDeg;
+        public bool IsRotatingAssemblyVisible => showRotatingAssembly;
+        public bool ArePistonsAndRodsVisible => showPistonsAndRods;
+        public bool AreBoreGuidesVisible => showBoreGuides;
+
+        public void SetTeachingAnimationPlaying(bool isPlaying)
+        {
+            if (animateInPlayMode && !isPlaying && Application.isPlaying)
+                previewCrankAngleDeg = Mathf.Repeat(animatedCrankAngleDeg, 360f);
+            else if (!animateInPlayMode && isPlaying)
+                animatedCrankAngleDeg = previewCrankAngleDeg;
+
+            animateInPlayMode = isPlaying;
+        }
+
+        public void SetTeachingAnimationRpm(float rpm)
+        {
+            teachingAnimationRpm = Mathf.Clamp(rpm, 0f, 300f);
+        }
+
+        public void SetCrankAngleDeg(float angleDeg)
+        {
+            previewCrankAngleDeg = Mathf.Repeat(angleDeg, 360f);
+            animatedCrankAngleDeg = previewCrankAngleDeg;
+            if (generatedRoot != null && pistons != null) UpdateMechanism(previewCrankAngleDeg);
+        }
+
+        public void SetRotatingAssemblyVisible(bool isVisible)
+        {
+            showRotatingAssembly = isVisible;
+            ApplyInspectionVisibility();
+        }
+
+        public void SetPistonsAndRodsVisible(bool isVisible)
+        {
+            showPistonsAndRods = isVisible;
+            ApplyInspectionVisibility();
+        }
+
+        public void SetBoreGuidesVisible(bool isVisible)
+        {
+            showBoreGuides = isVisible;
+            ApplyInspectionVisibility();
+        }
 
         private void Reset()
         {
@@ -109,8 +163,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
                    || !Mathf.Approximately(lastStrokeMm, controller.StrokeMm)
                    || !Mathf.Approximately(lastRodLengthMm, controller.ConnectingRodLengthMm)
                    || lastCylinderCount != controller.CylinderCount
-                   || !Mathf.Approximately(lastSpacingMultiplier, cylinderSpacingBoreMultiplier)
-                   || lastShowBoreGuides != showBoreGuides;
+                   || !Mathf.Approximately(lastSpacingMultiplier, cylinderSpacingBoreMultiplier);
         }
 
         private void RebuildInternal()
@@ -123,7 +176,6 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             lastRodLengthMm = controller.ConnectingRodLengthMm;
             lastCylinderCount = controller.CylinderCount;
             lastSpacingMultiplier = cylinderSpacingBoreMultiplier;
-            lastShowBoreGuides = showBoreGuides;
 
             if (controller.CylinderCount != 4)
             {
@@ -140,6 +192,9 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             generatedRoot = new GameObject("Generated I4 Mechanism").transform;
             generatedRoot.SetParent(transform, false);
             generatedRoot.gameObject.hideFlags = HideFlags.DontSaveInEditor;
+            rotatingAssemblyGroup = CreateGroup("Rotating Assembly");
+            pistonsAndRodsGroup = CreateGroup("Pistons and Rods");
+            boreGuidesGroup = CreateGroup("Bore Guides");
 
             CreateMaterials();
 
@@ -170,18 +225,21 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
                 pistons[i] = CreatePiston($"Piston {i + 1}", pistonDiameterM, pistonHeightM);
                 wristPins[i] = CreateCylinderBetween(
                     $"Wrist Pin {i + 1}",
+                    pistonsAndRodsGroup,
                     new Vector3(x - pinLengthM * 0.5f, 0f, 0f),
                     new Vector3(x + pinLengthM * 0.5f, 0f, 0f),
                     wristPinRadiusM,
                     crankMaterial);
                 connectingRods[i] = CreateCylinderBetween(
                     $"Connecting Rod {i + 1}",
+                    pistonsAndRodsGroup,
                     Vector3.zero,
                     Vector3.up * rodLengthM,
                     rodRadiusM,
                     rodMaterial);
                 crankPins[i] = CreateCylinderBetween(
                     $"Crank Pin {i + 1}",
+                    rotatingAssemblyGroup,
                     new Vector3(x - pinLengthM * 0.5f, 0f, 0f),
                     new Vector3(x + pinLengthM * 0.5f, 0f, 0f),
                     crankPinRadiusM,
@@ -195,23 +253,25 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
 
                     crankWebs[i, side] = CreateCylinderBetween(
                         $"Crank Web {i + 1} {sideName}",
+                        rotatingAssemblyGroup,
                         crankCentre,
                         crankCentre + Vector3.up * crankRadiusM,
                         webRadiusM,
                         crankMaterial);
                     counterweights[i, side] = CreateCylinderBetween(
                         $"Counterweight {i + 1} {sideName}",
+                        rotatingAssemblyGroup,
                         crankCentre,
                         crankCentre + Vector3.down * crankRadiusM * 0.78f,
                         webRadiusM * 1.35f,
                         crankMaterial);
                 }
 
-                if (showBoreGuides)
-                    CreateBoreGuides(i + 1, x, boreM, strokeM, rodLengthM, pistonHeightM);
+                CreateBoreGuides(i + 1, x, boreM, strokeM, rodLengthM, pistonHeightM);
             }
 
             UpdateMechanism(previewCrankAngleDeg);
+            ApplyInspectionVisibility();
         }
 
         private void UpdateMechanism(float baseCrankAngleDeg)
@@ -271,6 +331,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
                 float x = (i - 2f) * spacingM;
                 CreateCylinderBetween(
                     $"Main Journal {i + 1}",
+                    rotatingAssemblyGroup,
                     new Vector3(x - journalLengthM * 0.5f, 0f, 0f),
                     new Vector3(x + journalLengthM * 0.5f, 0f, 0f),
                     journalRadiusM,
@@ -282,18 +343,24 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
         {
             GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             go.name = objectName;
-            go.transform.SetParent(generatedRoot, false);
+            go.transform.SetParent(pistonsAndRodsGroup, false);
             go.transform.localScale = new Vector3(diameterM, heightM * 0.5f, diameterM);
             RemoveCollider(go);
             ApplyMaterial(go, pistonMaterial);
             return go.transform;
         }
 
-        private Transform CreateCylinderBetween(string objectName, Vector3 a, Vector3 b, float radiusM, Material material)
+        private Transform CreateCylinderBetween(
+            string objectName,
+            Transform parent,
+            Vector3 a,
+            Vector3 b,
+            float radiusM,
+            Material material)
         {
             GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             go.name = objectName;
-            go.transform.SetParent(generatedRoot, false);
+            go.transform.SetParent(parent, false);
             RemoveCollider(go);
             ApplyMaterial(go, material);
 
@@ -338,6 +405,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
                 Vector3 centre = new Vector3(x, centreY, 0f) + offsets[j];
                 CreateCylinderBetween(
                     $"Cylinder {cylinderNumber} Bore Guide {j + 1}",
+                    boreGuidesGroup,
                     centre + Vector3.down * heightM * 0.5f,
                     centre + Vector3.up * heightM * 0.5f,
                     guideRadiusM,
@@ -351,6 +419,20 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             rodMaterial = CreateMaterial(new Color(0.52f, 0.55f, 0.58f, 1f));
             pistonMaterial = CreateMaterial(new Color(0.72f, 0.74f, 0.76f, 1f));
             guideMaterial = CreateMaterial(new Color(0.20f, 0.55f, 0.90f, 1f));
+        }
+
+        private Transform CreateGroup(string groupName)
+        {
+            Transform group = new GameObject(groupName).transform;
+            group.SetParent(generatedRoot, false);
+            return group;
+        }
+
+        private void ApplyInspectionVisibility()
+        {
+            if (rotatingAssemblyGroup != null) rotatingAssemblyGroup.gameObject.SetActive(showRotatingAssembly);
+            if (pistonsAndRodsGroup != null) pistonsAndRodsGroup.gameObject.SetActive(showPistonsAndRods);
+            if (boreGuidesGroup != null) boreGuidesGroup.gameObject.SetActive(showBoreGuides);
         }
 
         private static Material CreateMaterial(Color color)
@@ -389,6 +471,10 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
                 else DestroyImmediate(generatedRoot.gameObject);
                 generatedRoot = null;
             }
+
+            rotatingAssemblyGroup = null;
+            pistonsAndRodsGroup = null;
+            boreGuidesGroup = null;
 
             DestroyMaterial(ref crankMaterial);
             DestroyMaterial(ref rodMaterial);

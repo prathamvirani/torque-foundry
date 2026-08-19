@@ -45,13 +45,37 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
         private float lastBlockDepthMultiplier = -1f;
         private float lastHeadHeightMultiplier = -1f;
         private float lastLinerCutawayAngleDeg = -1f;
-        private bool lastShowBlockEnvelope;
-        private bool lastShowCylinderLiners;
-        private bool lastShowDeckPlane;
-        private bool lastShowHeadEnvelope;
         private bool rebuildRequested = true;
 
         public string GeneratedHierarchyName => GeneratedRootName;
+        public bool IsBlockEnvelopeVisible => showBlockEnvelope;
+        public bool AreCylinderLinersVisible => showCylinderLiners;
+        public bool IsDeckPlaneVisible => showDeckPlane;
+        public bool IsHeadEnvelopeVisible => showHeadEnvelope;
+
+        public void SetBlockEnvelopeVisible(bool isVisible)
+        {
+            showBlockEnvelope = isVisible;
+            ApplyInspectionVisibility();
+        }
+
+        public void SetCylinderLinersVisible(bool isVisible)
+        {
+            showCylinderLiners = isVisible;
+            ApplyInspectionVisibility();
+        }
+
+        public void SetDeckPlaneVisible(bool isVisible)
+        {
+            showDeckPlane = isVisible;
+            ApplyInspectionVisibility();
+        }
+
+        public void SetHeadEnvelopeVisible(bool isVisible)
+        {
+            showHeadEnvelope = isVisible;
+            ApplyInspectionVisibility();
+        }
 
         private void Reset()
         {
@@ -108,11 +132,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
                    || !Mathf.Approximately(lastSpacingMultiplier, mechanismVisualizer.CylinderSpacingBoreMultiplier)
                    || !Mathf.Approximately(lastBlockDepthMultiplier, blockDepthBoreMultiplier)
                    || !Mathf.Approximately(lastHeadHeightMultiplier, headHeightBoreMultiplier)
-                   || !Mathf.Approximately(lastLinerCutawayAngleDeg, linerCutawayAngleDeg)
-                   || lastShowBlockEnvelope != showBlockEnvelope
-                   || lastShowCylinderLiners != showCylinderLiners
-                   || lastShowDeckPlane != showDeckPlane
-                   || lastShowHeadEnvelope != showHeadEnvelope;
+                   || !Mathf.Approximately(lastLinerCutawayAngleDeg, linerCutawayAngleDeg);
         }
 
         private void RebuildInternal()
@@ -151,14 +171,11 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
 
             CreateMaterials();
 
-            if (showBlockEnvelope)
-                CreateBlockEnvelope(engineLengthM, blockDepthM, blockBottomYM, blockHeightM, boreM);
-            if (showCylinderLiners)
-                CreateCylinderLiners(spacingM, boreM, linerBottomYM, linerHeightM);
-            if (showDeckPlane)
-                CreateDeckPlane(engineLengthM, blockDepthM, deckYM, spacingM, boreM);
-            if (showHeadEnvelope)
-                CreateHeadEnvelope(engineLengthM, blockDepthM, deckYM, headHeightM, boreM);
+            CreateBlockEnvelope(engineLengthM, blockDepthM, blockBottomYM, blockHeightM, boreM);
+            CreateCylinderLiners(spacingM, boreM, linerBottomYM, linerHeightM);
+            CreateDeckPlane(engineLengthM, blockDepthM, deckYM, spacingM, boreM);
+            CreateHeadEnvelope(engineLengthM, blockDepthM, deckYM, headHeightM, boreM);
+            ApplyInspectionVisibility();
         }
 
         private void CreateBlockEnvelope(float lengthM, float depthM, float bottomYM, float heightM, float boreM)
@@ -249,6 +266,21 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             Transform group = new GameObject(groupName).transform;
             group.SetParent(generatedRoot, false);
             return group;
+        }
+
+        private void ApplyInspectionVisibility()
+        {
+            SetGroupActive("Block Envelope", showBlockEnvelope);
+            SetGroupActive("Cylinder Liners", showCylinderLiners);
+            SetGroupActive("Deck Plane", showDeckPlane);
+            SetGroupActive("Cylinder Head Envelope", showHeadEnvelope);
+        }
+
+        private void SetGroupActive(string groupName, bool isVisible)
+        {
+            if (generatedRoot == null) return;
+            Transform group = generatedRoot.Find(groupName);
+            if (group != null) group.gameObject.SetActive(isVisible);
         }
 
         private static void CreateCube(string objectName, Transform parent, Vector3 position, Vector3 scale, Material material)
@@ -361,10 +393,6 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             lastBlockDepthMultiplier = blockDepthBoreMultiplier;
             lastHeadHeightMultiplier = headHeightBoreMultiplier;
             lastLinerCutawayAngleDeg = linerCutawayAngleDeg;
-            lastShowBlockEnvelope = showBlockEnvelope;
-            lastShowCylinderLiners = showCylinderLiners;
-            lastShowDeckPlane = showDeckPlane;
-            lastShowHeadEnvelope = showHeadEnvelope;
         }
 
         private void CleanupGenerated()

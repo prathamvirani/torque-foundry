@@ -66,7 +66,7 @@ Foundation reference cases cover displacement, mean piston speed, compression-ra
 
 `Game/Assets/VES/EngineLab/Editor/EngineLabSceneValidation.cs`
 
-The repeatable editor validation opens the dedicated scene, checks its root transform and script references, and exercises bore/stroke/rod-length changes to confirm the mechanism and context replace their generated hierarchies without stale state.
+The repeatable editor validation opens the dedicated scene, checks its root transform and script references, exercises bore/stroke/rod-length changes to confirm the mechanism and context replace their generated hierarchies without stale state, and checks the limits and state isolation of the inspection controls.
 
 The same verifier has also been run successfully from its normal editor menu command, with zero red Console errors and a captured inspection-camera view for visual review.
 
@@ -114,6 +114,22 @@ The presentation now provides independently inspectable generated groups for:
 
 This context is a teaching and spatial-reference aid, not a structural, thermal, casting, combustion-chamber, or mass model. Bore, stroke, rod length, and shared cylinder spacing drive its rebuild; block depth, head height, liner wall, and cutaway proportions remain explicitly presentation-only. The current validity limit is the inline-four prototype.
 
+### Inspection camera and teaching controls
+
+- `Game/Assets/VES/EngineLab/Presentation/EngineLabInspectionCamera.cs`
+- `Game/Assets/VES/EngineLab/Presentation/EngineLabInspectionPanel.cs`
+
+The Play Mode inspection layer now provides:
+
+- bounded left-mouse orbit, middle-mouse pan, and wheel zoom
+- focus-engine and reset-view commands (`F` and `Home` shortcuts)
+- play/pause teaching motion without changing the simulated operating point
+- a 0–360° crank-angle scrubber
+- a separate 0–300 rpm teaching-animation speed
+- independent visibility for the rotating assembly, pistons/rods, bore guides, liners, block, deck, and head
+
+These controls own presentation state only. The panel displays the authoritative simulated operating RPM read-only to make the separation explicit. Generated geometry is grouped by inspection category and remains disposable/rebuildable from the controller configuration.
+
 ## Immediate next steps
 
 Work in this order unless the user redirects:
@@ -136,11 +152,12 @@ Work in this order unless the user redirects:
    - deck-plane frame and cutaway head envelope
    - separate generated groups retain crank/rod/piston inspection access
 
-4. **Add useful inspection controls**
-   - orbit/zoom/focus camera suitable for an engineering lab
-   - crank-angle scrubber
-   - play/pause teaching animation
-   - isolate/fade mechanical groups where practical
+4. **Add useful inspection controls — completed**
+   - bounded orbit/zoom/pan camera with focus and reset commands
+   - crank-angle scrubber and play/pause teaching animation
+   - adjustable teaching RPM kept separate from simulated operating RPM
+   - independently hideable mechanism and block/head context groups
+   - completed: normal-editor scene validation and targeted Play Mode check with zero Console errors
 
 5. **Create the first proper Engine Lab UI**
    - bore
@@ -154,7 +171,7 @@ Work in this order unless the user redirects:
 6. **Strengthen automated validation — in progress**
    - add a Unity Test Framework or similarly repeatable test path for core calculations
    - cover slider-crank endpoints and symmetry
-   - completed: editor validation for scene integrity and geometry-input rebuilds without stale presentation state
+   - completed: editor validation for scene integrity, geometry-input rebuilds, camera limits, teaching-state isolation, and group visibility without stale presentation state
 
 7. **Prepare basic dyno milestone**
    - only after geometry/scene/UI foundation is stable

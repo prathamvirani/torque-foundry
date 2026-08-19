@@ -112,9 +112,13 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
             EngineLabController controller = root.GetComponent<EngineLabController>();
             InlineFourVisualizer visualizer = root.GetComponent<InlineFourVisualizer>();
             InlineFourEngineContextVisualizer contextVisualizer = root.GetComponent<InlineFourEngineContextVisualizer>();
+            EngineLabInspectionPanel inspectionPanel = root.GetComponent<EngineLabInspectionPanel>();
+            EngineLabInspectionCamera inspectionCamera = UnityEngine.Object.FindAnyObjectByType<EngineLabInspectionCamera>();
             Require(controller != null, "Engine Lab root is missing EngineLabController.");
             Require(visualizer != null, "Engine Lab root is missing InlineFourVisualizer.");
             Require(contextVisualizer != null, "Engine Lab root is missing InlineFourEngineContextVisualizer.");
+            Require(inspectionPanel != null, "Engine Lab root is missing EngineLabInspectionPanel.");
+            Require(inspectionCamera != null, "Dedicated scene is missing EngineLabInspectionCamera.");
             Require(CountMissingScripts(scene) == 0, "The dedicated scene contains missing MonoBehaviour scripts.");
 
             var controllerObject = new SerializedObject(controller);
@@ -146,11 +150,13 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
             controller.Recalculate();
             visualizer.RebuildPreview();
             contextVisualizer.RebuildPreview();
+            VerifyPresentationControls(controller, visualizer, contextVisualizer, inspectionCamera);
 
             Require(EditorSceneManager.SaveScene(scene), "Dedicated Engine Lab scene could not be saved after validation.");
 
             return "Engine Lab scene validation PASSED: scene opened, compile completed, root transform reset, "
-                   + "no missing scripts, and bore/stroke/rod-length rebuild cases replaced the generated I4 hierarchy correctly.";
+                   + "no missing scripts, bore/stroke/rod-length rebuild cases replaced the generated I4 hierarchy correctly, "
+                   + "and bounded camera, teaching-state, and inspection-visibility controls behaved deterministically.";
         }
 
         private static void VerifyRebuild(
@@ -180,7 +186,10 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
                 "Rebuild reused a stale generated hierarchy.");
             previousGeneratedRoot = generatedRoot;
 
-            Require(generatedRoot.childCount == 53, $"Expected 53 generated presentation objects, found {generatedRoot.childCount}.");
+            Require(generatedRoot.childCount == 3, "Expected three independently inspectable mechanism groups.");
+            RequireGroupChildCount(generatedRoot, "Rotating Assembly", 25);
+            RequireGroupChildCount(generatedRoot, "Pistons and Rods", 12);
+            RequireGroupChildCount(generatedRoot, "Bore Guides", 16);
             Require(CountChildrenWithPrefix(generatedRoot, "Piston ") == 4, "Expected four pistons.");
             Require(CountChildrenWithPrefix(generatedRoot, "Connecting Rod ") == 4, "Expected four connecting rods.");
             Require(CountChildrenWithPrefix(generatedRoot, "Crank Pin ") == 4, "Expected four crank pins.");
@@ -200,9 +209,9 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
             RequireGroupChildCount(contextRoot, "Deck Plane", 7);
             RequireGroupChildCount(contextRoot, "Cylinder Head Envelope", 4);
 
-            Transform piston1 = generatedRoot.Find("Piston 1");
-            Transform piston2 = generatedRoot.Find("Piston 2");
-            Transform connectingRod1 = generatedRoot.Find("Connecting Rod 1");
+            Transform piston1 = generatedRoot.Find("Pistons and Rods/Piston 1");
+            Transform piston2 = generatedRoot.Find("Pistons and Rods/Piston 2");
+            Transform connectingRod1 = generatedRoot.Find("Pistons and Rods/Connecting Rod 1");
             Require(piston1 != null && piston2 != null && connectingRod1 != null, "Primary mechanism objects are missing.");
 
             float boreM = boreMm / 1000f;
@@ -249,9 +258,9 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
         private static int CountChildrenWithPrefix(Transform parent, string prefix)
         {
             int count = 0;
-            foreach (Transform child in parent)
+            foreach (Transform child in parent.GetComponentsInChildren<Transform>(true))
             {
-                if (child.name.StartsWith(prefix, StringComparison.Ordinal)) count++;
+                if (child != parent && child.name.StartsWith(prefix, StringComparison.Ordinal)) count++;
             }
 
             return count;
@@ -263,6 +272,90 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
             Require(group != null, $"Context group '{groupName}' is missing.");
             Require(group.childCount == expectedCount,
                 $"Context group '{groupName}' expected {expectedCount} objects, found {group.childCount}.");
+        }
+
+        private static void VerifyPresentationControls(
+            EngineLabController controller,
+            InlineFourVisualizer visualizer,
+            InlineFourEngineContextVisualizer contextVisualizer,
+            EngineLabInspectionCamera inspectionCamera)
+        {
+            float simulatedOperatingRpm = controller.EngineSpeedRpm;
+            bool originalPlaying = visualizer.IsTeachingAnimationPlaying;
+            float originalTeachingRpm = visualizer.TeachingAnimationRpm;
+            float originalAngleDeg = visualizer.CurrentCrankAngleDeg;
+            bool originalRotatingVisibility = visualizer.IsRotatingAssemblyVisible;
+            bool originalPistonVisibility = visualizer.ArePistonsAndRodsVisible;
+            bool originalGuideVisibility = visualizer.AreBoreGuidesVisible;
+            bool originalBlockVisibility = contextVisualizer.IsBlockEnvelopeVisible;
+            bool originalLinerVisibility = contextVisualizer.AreCylinderLinersVisible;
+            bool originalDeckVisibility = contextVisualizer.IsDeckPlaneVisible;
+            bool originalHeadVisibility = contextVisualizer.IsHeadEnvelopeVisible;
+
+            visualizer.SetTeachingAnimationPlaying(false);
+            visualizer.SetTeachingAnimationRpm(42f);
+            visualizer.SetCrankAngleDeg(123f);
+            Require(!visualizer.IsTeachingAnimationPlaying, "Teaching animation did not pause.");
+            Require(Mathf.Approximately(visualizer.TeachingAnimationRpm, 42f), "Teaching RPM did not update.");
+            Require(Mathf.Approximately(visualizer.CurrentCrankAngleDeg, 123f), "Crank-angle scrub state did not update.");
+            Require(Mathf.Approximately(controller.EngineSpeedRpm, simulatedOperatingRpm),
+                "Teaching controls changed the simulated engine operating RPM.");
+
+            Transform mechanismRoot = controller.transform.Find(GeneratedRootName);
+            Transform contextRoot = controller.transform.Find(contextVisualizer.GeneratedHierarchyName);
+            visualizer.SetRotatingAssemblyVisible(false);
+            visualizer.SetPistonsAndRodsVisible(false);
+            visualizer.SetBoreGuidesVisible(false);
+            contextVisualizer.SetBlockEnvelopeVisible(false);
+            contextVisualizer.SetCylinderLinersVisible(false);
+            contextVisualizer.SetDeckPlaneVisible(false);
+            contextVisualizer.SetHeadEnvelopeVisible(false);
+            RequireGroupsInactive(mechanismRoot, "Rotating Assembly", "Pistons and Rods", "Bore Guides");
+            RequireGroupsInactive(contextRoot, "Block Envelope", "Cylinder Liners", "Deck Plane", "Cylinder Head Envelope");
+
+            visualizer.SetTeachingAnimationPlaying(originalPlaying);
+            visualizer.SetTeachingAnimationRpm(originalTeachingRpm);
+            visualizer.SetCrankAngleDeg(originalAngleDeg);
+            visualizer.SetRotatingAssemblyVisible(originalRotatingVisibility);
+            visualizer.SetPistonsAndRodsVisible(originalPistonVisibility);
+            visualizer.SetBoreGuidesVisible(originalGuideVisibility);
+            contextVisualizer.SetBlockEnvelopeVisible(originalBlockVisibility);
+            contextVisualizer.SetCylinderLinersVisible(originalLinerVisibility);
+            contextVisualizer.SetDeckPlaneVisible(originalDeckVisibility);
+            contextVisualizer.SetHeadEnvelopeVisible(originalHeadVisibility);
+
+            inspectionCamera.ResetEngineView();
+            Vector3 defaultPivot = inspectionCamera.Pivot;
+            float defaultDistance = inspectionCamera.DistanceM;
+            inspectionCamera.SetDistance(-1f);
+            Require(Mathf.Approximately(inspectionCamera.DistanceM, inspectionCamera.MinimumDistanceM),
+                "Inspection camera minimum zoom limit failed.");
+            inspectionCamera.SetDistance(100f);
+            Require(Mathf.Approximately(inspectionCamera.DistanceM, inspectionCamera.MaximumDistanceM),
+                "Inspection camera maximum zoom limit failed.");
+            inspectionCamera.SetOrbit(725f, 1000f);
+            Require(inspectionCamera.YawDeg >= -180f && inspectionCamera.YawDeg < 180f,
+                "Inspection camera yaw normalization failed.");
+            Require(inspectionCamera.PitchDeg <= 80f, "Inspection camera pitch limit failed.");
+            inspectionCamera.SetPivot(defaultPivot + Vector3.one * 100f);
+            Require(Vector3.Distance(defaultPivot, inspectionCamera.Pivot) <= 0.65001f,
+                "Inspection camera pan/focus limit failed.");
+            inspectionCamera.ResetEngineView();
+            Require(Vector3.Distance(defaultPivot, inspectionCamera.Pivot) <= PositionToleranceM,
+                "Reset Engine View did not restore the engine focus.");
+            Require(Mathf.Abs(defaultDistance - inspectionCamera.DistanceM) <= PositionToleranceM,
+                "Reset Engine View did not restore the default zoom.");
+        }
+
+        private static void RequireGroupsInactive(Transform root, params string[] groupNames)
+        {
+            Require(root != null, "Generated inspection hierarchy is missing.");
+            foreach (string groupName in groupNames)
+            {
+                Transform group = root.Find(groupName);
+                Require(group != null && !group.gameObject.activeSelf,
+                    $"Inspection group '{groupName}' did not hide independently.");
+            }
         }
 
         private static float ReadFloat(SerializedObject serializedObject, string propertyName)
