@@ -6,7 +6,7 @@
 
 **Active branch:** `feature/engine-lab-foundation`
 
-**Verification note:** On 2026-08-20, the dedicated scene passed `Torque Foundry → Validate Engine Lab Scene` in a normal licensed Unity 6000.5.8f1 editor session using D3D12. The scene opened cleanly, the Engine Lab root remained reset, all bore/stroke/rod-length rebuild cases passed, the Console had zero red errors, and a rendered inspection view confirmed the cutaway block/head context did not obscure the crank, rods, pistons, or liners.
+**Verification note:** On 2026-08-20, the dedicated scene passed `Torque Foundry → Validate Engine Lab Scene` in a normal licensed Unity 6000.5.8f1 editor session using D3D12. The scene opened cleanly, the Engine Lab root remained reset, all bore/stroke/rod-length rebuild cases passed, the Console had zero red errors, and captured views confirmed that the Visual Fidelity Pass v1 assembly remains inspectable in Full Engine, Cutaway, Transparent Block / Head, Rotating Assembly Only, and Valvetrain Only modes.
 
 The current milestone is to turn the initial validated engine geometry into a usable Engine Lab: a configurable reciprocating engine with authoritative pure-C# calculations and a live Unity 3D teaching/inspection presentation.
 
@@ -66,7 +66,7 @@ Foundation reference cases cover displacement, mean piston speed, compression-ra
 
 `Game/Assets/VES/EngineLab/Editor/EngineLabSceneValidation.cs`
 
-The repeatable editor validation opens the dedicated scene, checks its root transform and script references, exercises bore/stroke/rod-length changes to confirm the mechanism and context replace their generated hierarchies without stale state, and checks the limits and state isolation of the inspection controls.
+The repeatable editor validation opens the dedicated scene, checks its root transform and script references, exercises bore/stroke/rod-length changes to confirm the assembly replaces its generated hierarchy without stale state, verifies the authoritative 86 × 86 × 143 mm reference state and slider-crank positions, and checks the limits and state isolation of the inspection controls.
 
 The same verifier has also been run successfully from its normal editor menu command, with zero red Console errors and a captured inspection-camera view for visual review.
 
@@ -76,11 +76,28 @@ The same verifier has also been run successfully from its normal editor menu com
 
 This is a thin MonoBehaviour adapter. It may expose inputs/outputs to the Inspector and later UI, but engineering equations must remain in Core.
 
-### Procedural I4 presentation
+### Visual Fidelity Pass v1 presentation
+
+`Game/Assets/VES/EngineLab/Presentation/InlineFourVisualFidelityAssembly.cs`
+
+The active game-facing presentation is now a parameter-driven semi-realistic inline-four assembly. It provides:
+
+- a recognizable cast-block silhouette with integrated barrel bays, deck/bore lands, deep crankcase skirt, five main-bearing bulkheads and caps, sump rail, oil pan, end faces, ribs, and bosses
+- five main journals, four rod journals, broad webs, counterweights, front snout/damper, rear flange, and flywheel
+- pistons with crown, ring lands, skirts, pin bosses, and wrist pins
+- forged connecting rods with separate big-end caps, tapered I-beam forms, and small-end eyes
+- a solid/cutaway head with chambers, short port regions, valves, springs, two camshafts, lobes, caps, and a valve/cam cover
+- material classes for cast iron, cast aluminium, machined steel, piston aluminium, bearing surfaces, seals, and dark internal components
+
+Authoritative bore, stroke, rod length, cylinder spacing, crank phasing, and slider-crank positions continue to originate in the controller/Core path. Additional casting, journal, piston, rod, valve, and cam proportions are presentation assumptions documented in `Documentation/ENGINE_LAB_VISUAL_FIDELITY_V1.md`; they never feed back into simulation state.
+
+### Prototype/reference presentation
 
 `Game/Assets/VES/EngineLab/Presentation/InlineFourVisualizer.cs`
 
-The first procedural inline-four mechanism is working in Unity with:
+`Game/Assets/VES/EngineLab/Presentation/InlineFourEngineContextVisualizer.cs`
+
+The original mechanism skeleton and wall-envelope context remain serialized but disabled as prototype/reference implementations. They established:
 
 - four pistons
 - wrist pins
@@ -93,26 +110,13 @@ The first procedural inline-four mechanism is working in Unity with:
 - editor preview crank angle
 - separate slow teaching-animation RPM
 
-The visualizer is intentionally an engineering skeleton, not final art.
+They are no longer the active game presentation and should not constrain later fidelity work.
 
 ### Dedicated Engine Lab scene
 
 `Game/Assets/VES/EngineLab/Scenes/EngineLab.unity`
 
-The dedicated scene contains the controller, I4 mechanism, and Engine Lab presentation context on a root transform at zero position/rotation and unit scale. The template `SampleScene` is no longer used for Engine Lab development.
-
-### Engine block and head context
-
-`Game/Assets/VES/EngineLab/Presentation/InlineFourEngineContextVisualizer.cs`
-
-The presentation now provides independently inspectable generated groups for:
-
-- a camera-facing cutaway block envelope
-- four parameter-driven cutaway cylinder liners
-- a deck-plane frame around the bores
-- a camera-facing cutaway cylinder-head envelope
-
-This context is a teaching and spatial-reference aid, not a structural, thermal, casting, combustion-chamber, or mass model. Bore, stroke, rod length, and shared cylinder spacing drive its rebuild; block depth, head height, liner wall, and cutaway proportions remain explicitly presentation-only. The current validity limit is the inline-four prototype.
+The dedicated scene contains the controller and Visual Fidelity Pass v1 assembly on a root transform at zero position/rotation and unit scale. The template `SampleScene` remains untouched and is not used for Engine Lab development.
 
 ### Inspection camera and teaching controls
 
@@ -126,9 +130,9 @@ The Play Mode inspection layer now provides:
 - play/pause teaching motion without changing the simulated operating point
 - a 0–360° crank-angle scrubber
 - a separate 0–300 rpm teaching-animation speed
-- independent visibility for the rotating assembly, pistons/rods, bore guides, liners, block, deck, and head
+- five coherent inspection presets: Full Engine, Cutaway, Transparent Block / Head, Rotating Assembly Only, and Valvetrain Only
 
-These controls own presentation state only. The panel displays the authoritative simulated operating RPM read-only to make the separation explicit. Generated geometry is grouped by inspection category and remains disposable/rebuildable from the controller configuration.
+These controls own presentation state only. The panel displays the authoritative simulated operating RPM read-only to make the separation explicit. Generated geometry is grouped by inspection category and remains disposable/rebuildable from the controller configuration. Cutaway retains sectioned casting, deck lands, end faces, and crankcase structure rather than representing inspection by deleting an entire camera-facing wall.
 
 ## Immediate next steps
 
@@ -140,23 +144,24 @@ Work in this order unless the user redirects:
    - template `SampleScene` has been restored and is no longer the Engine Lab development scene
    - the Engine Lab root is serialized at `(0,0,0)` / zero rotation / unit scale
 
-2. **Improve the procedural mechanical model — in progress**
-   - completed: mechanically legible main journals, crank pins, paired webs, and counterweights
-   - remaining: improve connecting-rod and piston proportions while keeping geometry parameter-driven
+2. **Improve the procedural mechanical model — Visual Fidelity Pass v1 completed**
+   - completed: main/rod journals, broad crank webs, counterweights, snout/damper, flange, and flywheel
+   - completed: forged-rod I-beam silhouettes with separate caps, and pistons with crown/ring-land/skirt/pin-boss forms
    - keep crank/piston kinematics authoritative to the core geometry
    - avoid turning presentation dimensions into hidden simulation inputs
 
-3. **Add engine-block/cylinder-head context — completed**
-   - configurable presentation-only block envelope
-   - four visible cutaway cylinder liners
-   - deck-plane frame and cutaway head envelope
-   - separate generated groups retain crank/rod/piston inspection access
+3. **Add engine-block/cylinder-head context — Visual Fidelity Pass v1 completed**
+   - wall-envelope prototype superseded by a stepped cast-block/crankcase silhouette and solid/cutaway head casting
+   - four integrated bore openings and visible cutaway liners
+   - five main-bearing bulkheads/saddles and caps, sump rail, oil pan, deck lands, end faces, ribs, and bosses
+   - chambers, short intake/exhaust port regions, valves/springs, two cams/lobes/caps, and a valve/cam cover
+   - separate generated groups retain crank/rod/piston and valvetrain inspection access
 
 4. **Add useful inspection controls — completed**
    - bounded orbit/zoom/pan camera with focus and reset commands
    - crank-angle scrubber and play/pause teaching animation
    - adjustable teaching RPM kept separate from simulated operating RPM
-   - independently hideable mechanism and block/head context groups
+   - five purpose-built inspection modes with mode-aware focus/framing
    - completed: normal-editor scene validation and targeted Play Mode check with zero Console errors
 
 5. **Create the first proper Engine Lab UI**
