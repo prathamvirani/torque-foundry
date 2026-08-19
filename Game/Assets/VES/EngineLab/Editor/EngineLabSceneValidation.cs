@@ -15,7 +15,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
         private const string ScenePath = "Assets/VES/EngineLab/Scenes/EngineLab.unity";
         private const string GeneratedRootName = "Generated I4 Visual Fidelity Assembly";
         private const string InteractiveValidationArgument = "-torqueFoundryValidateEngineLab";
-        private const string InteractiveValidationSessionKey = "TorqueFoundry.EngineLabInteractiveValidationRan";
+        private const string InteractiveValidationSessionKey = "TorqueFoundry.EngineLabInteractiveValidationRanV2";
         private const float PositionToleranceM = 0.00001f;
 
         [InitializeOnLoadMethod]
@@ -24,7 +24,6 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
             if (Application.isBatchMode
                 || SessionState.GetBool(InteractiveValidationSessionKey, false)
                 || Array.IndexOf(Environment.GetCommandLineArgs(), InteractiveValidationArgument) < 0) return;
-            SessionState.SetBool(InteractiveValidationSessionKey, true);
             EditorApplication.delayCall += RunRequestedInteractiveValidation;
         }
 
@@ -64,11 +63,19 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
 
         private static void RunRequestedInteractiveValidation()
         {
+            if (SessionState.GetBool(InteractiveValidationSessionKey, false)) return;
+            SessionState.SetBool(InteractiveValidationSessionKey, true);
+            RunInteractive();
+        }
+
+        public static void RunInteractive()
+        {
             try
             {
                 ClearConsole();
-                Require(EditorApplication.ExecuteMenuItem("Torque Foundry/Validate Engine Lab Scene"),
-                    "Engine Lab validation menu command could not be executed.");
+                string report = ValidateScene();
+                WriteReport(report);
+                Debug.Log(report);
                 int consoleErrorCount = GetConsoleErrorCount();
                 Require(consoleErrorCount == 0,
                     $"Unity Console contained {consoleErrorCount} red error(s) after scene validation.");
@@ -76,14 +83,14 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
                 AppendReport($"Interactive editor verification PASSED: Console red errors = 0.\n"
                              + $"Inspection screenshot: {screenshotPath}");
                 Debug.Log("Interactive Engine Lab verification PASSED: validator passed and Console has zero red errors.");
-                EditorApplication.delayCall += () => EditorApplication.Exit(0);
+                EditorApplication.Exit(0);
             }
             catch (Exception exception)
             {
                 string report = $"Interactive Engine Lab verification FAILED: {exception}";
                 WriteReport(report);
                 Debug.LogError(report);
-                EditorApplication.delayCall += () => EditorApplication.Exit(1);
+                EditorApplication.Exit(1);
             }
         }
 
@@ -121,14 +128,15 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
             float originalPreviewAngleDeg = visualAssembly.CurrentCrankAngleDeg;
             EngineInspectionMode originalInspectionMode = visualAssembly.InspectionMode;
             Transform previousGeneratedRoot = null;
+            Mesh previousGeneratedMesh = null;
             const float previewAngleDeg = 37f;
             visualAssembly.SetCrankAngleDeg(previewAngleDeg);
             VerifyRebuild(controller, visualAssembly, controllerObject, 86f, 86f, 143f,
-                previewAngleDeg, ref previousGeneratedRoot);
+                previewAngleDeg, ref previousGeneratedRoot, ref previousGeneratedMesh);
             VerifyRebuild(controller, visualAssembly, controllerObject, 92f, 86f, 150f,
-                previewAngleDeg, ref previousGeneratedRoot);
+                previewAngleDeg, ref previousGeneratedRoot, ref previousGeneratedMesh);
             VerifyRebuild(controller, visualAssembly, controllerObject, 84f, 94f, 155f,
-                previewAngleDeg, ref previousGeneratedRoot);
+                previewAngleDeg, ref previousGeneratedRoot, ref previousGeneratedMesh);
 
             SetFloat(controllerObject, "boreMm", originalBoreMm);
             SetFloat(controllerObject, "strokeMm", originalStrokeMm);
@@ -142,8 +150,9 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
             Require(EditorSceneManager.SaveScene(scene), "Dedicated Engine Lab scene could not be saved after validation.");
             return "Engine Lab scene validation PASSED: scene opened, compile completed, root transform reset, "
                    + "no missing scripts, authoritative 86 x 86 x 143 mm state and slider-crank positions remained unchanged, "
-                   + "the Visual Fidelity Pass v1 assembly rebuilt from all geometry cases, and all five inspection modes, "
-                   + "bounded camera controls, and teaching-state isolation behaved deterministically.";
+                   + "the Visual Fidelity Pass v2 casting, ports, functional valvetrain, and timing drive rebuilt from all "
+                   + "geometry cases, and the 720-degree cycle, all five inspection modes, bounded camera controls, and "
+                   + "teaching-state isolation behaved deterministically.";
         }
 
         private static void VerifyRebuild(
@@ -154,7 +163,8 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
             float strokeMm,
             float rodLengthMm,
             float previewAngleDeg,
-            ref Transform previousGeneratedRoot)
+            ref Transform previousGeneratedRoot,
+            ref Mesh previousGeneratedMesh)
         {
             SetFloat(controllerObject, "boreMm", boreMm);
             SetFloat(controllerObject, "strokeMm", strokeMm);
@@ -166,32 +176,63 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
             Require(generatedRoot != null, $"Generated fidelity hierarchy missing for {boreMm} x {strokeMm} mm geometry.");
             Require(previousGeneratedRoot == null || generatedRoot != previousGeneratedRoot,
                 "Visual-fidelity rebuild reused a stale generated hierarchy.");
+            Require(previousGeneratedMesh == null,
+                "Visual-fidelity rebuild left a stale generated procedural mesh alive.");
             previousGeneratedRoot = generatedRoot;
+            MeshFilter generatedMeshFilter = generatedRoot.GetComponentInChildren<MeshFilter>(true);
+            previousGeneratedMesh = generatedMeshFilter != null ? generatedMeshFilter.sharedMesh : null;
 
-            Require(generatedRoot.childCount == 11, "Expected eleven independently inspectable fidelity groups.");
-            RequireGroupMinimum(generatedRoot, "Cylinder Block - Full", 20);
-            RequireGroupMinimum(generatedRoot, "Cylinder Block - Cutaway", 18);
-            RequireGroupMinimum(generatedRoot, "Block Internals and Liners", 25);
+            Require(generatedRoot.childCount == 15, "Expected fifteen independently inspectable v2 groups.");
+            RequireGroupMinimum(generatedRoot, "Cylinder Block - Full", 18);
+            RequireGroupMinimum(generatedRoot, "Cylinder Block - Cutaway", 10);
+            RequireGroupMinimum(generatedRoot, "Block Internals and Liners", 29);
             RequireGroupMinimum(generatedRoot, "Cylinder Head - Full", 10);
             RequireGroupMinimum(generatedRoot, "Cylinder Head - Cutaway", 10);
-            RequireGroupMinimum(generatedRoot, "Head Chambers and Ports", 20);
-            RequireGroupMinimum(generatedRoot, "Crankshaft Internal", 15);
+            RequireGroupMinimum(generatedRoot, "Head Chambers and Ports", 50);
+            RequireGroupMinimum(generatedRoot, "Crankshaft Internal", 25);
             RequireGroupMinimum(generatedRoot, "Crankshaft External", 5);
-            RequireGroupMinimum(generatedRoot, "Pistons and Forged Rods", 40);
-            RequireGroupMinimum(generatedRoot, "DOHC Valvetrain", 80);
+            RequireGroupMinimum(generatedRoot, "Pistons and Forged Rods", 60);
+            RequireGroupMinimum(generatedRoot, "DOHC Valvetrain", 150);
+            RequireGroupMinimum(generatedRoot, "Timing Drive Internal", 120);
+            RequireGroupMinimum(generatedRoot, "Timing Covers", 1);
+            RequireGroupMinimum(generatedRoot, "Airflow Teaching Paths", 60);
+            RequireGroupMinimum(generatedRoot, "Combustion Cycle Highlights", 4);
             Require(CountChildrenWithPrefix(generatedRoot, "Cylinder liner ") == 4, "Expected four cutaway liners.");
-            Require(CountChildrenWithPrefix(generatedRoot, "Main-bearing bulkhead ") == 5,
+            Require(CountChildrenWithPrefix(generatedRoot, "Main bearing bulkhead ") == 5,
                 "Expected five main-bearing bulkheads and saddles.");
             Require(CountChildrenWithPrefix(generatedRoot, "Main journal ") == 5, "Expected five main journals.");
-            Require(CountChildrenWithPrefix(generatedRoot, "Crank throw ") == 4, "Expected four crank throws.");
+            Require(CountChildrenWithPrefix(generatedRoot, "Curved crank throw ") == 4, "Expected four crank throws.");
             Require(CountChildrenWithPrefix(generatedRoot, "Piston assembly ") == 4, "Expected four detailed pistons.");
             Require(CountChildrenWithPrefix(generatedRoot, "Forged connecting rod ") == 4,
                 "Expected four forged connecting rods.");
             Require(CountChildrenWithPrefix(generatedRoot, "Pent-roof combustion chamber ") == 4,
                 "Expected four combustion-chamber regions.");
-            Require(CountChildrenWithPrefix(generatedRoot, "Cam lobe ") == 16, "Expected sixteen DOHC cam lobes.");
+            Require(CountChildrenWithPrefix(generatedRoot, "Intake cam lobe ") == 8,
+                "Expected eight intake cam lobes.");
+            Require(CountChildrenWithPrefix(generatedRoot, "Exhaust cam lobe ") == 8,
+                "Expected eight exhaust cam lobes.");
             Require(CountChildrenWithPrefix(generatedRoot, "Intake valve stem ") == 8, "Expected eight intake valves.");
             Require(CountChildrenWithPrefix(generatedRoot, "Exhaust valve stem ") == 8, "Expected eight exhaust valves.");
+            Require(CountChildrenWithPrefix(generatedRoot, "Intake external port opening ") == 8,
+                "Expected four paired intake-port openings.");
+            Require(CountChildrenWithPrefix(generatedRoot, "Exhaust external port opening ") == 8,
+                "Expected four paired exhaust-port openings.");
+            Require(CountChildrenWithPrefix(generatedRoot, "Intake curved port runner ") == 8,
+                "Expected eight traceable intake runners.");
+            Require(CountChildrenWithPrefix(generatedRoot, "Exhaust curved port runner ") == 8,
+                "Expected eight traceable exhaust runners.");
+            Require(FindDescendant(generatedRoot, "Crank timing sprocket") != null,
+                "Timing drive is missing the crank sprocket.");
+            Require(FindDescendant(generatedRoot, "Intake cam sprocket and phaser") != null,
+                "Timing drive is missing the intake cam sprocket/phaser.");
+            Require(FindDescendant(generatedRoot, "Exhaust cam sprocket and phaser") != null,
+                "Timing drive is missing the exhaust cam sprocket/phaser.");
+            Require(FindDescendant(generatedRoot, "Continuous timing chain path") != null,
+                "Timing drive is missing the chain path.");
+            Require(FindDescendant(generatedRoot, "Fixed timing-chain guide") != null
+                    && FindDescendant(generatedRoot, "Tensioning timing-chain guide") != null
+                    && FindDescendant(generatedRoot, "Hydraulic chain tensioner") != null,
+                "Timing drive is missing a guide or tensioner.");
 
             Transform piston1 = FindDescendant(generatedRoot, "Piston assembly 1");
             Transform piston2 = FindDescendant(generatedRoot, "Piston assembly 2");
@@ -215,6 +256,8 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
                 "Forged connecting-rod eye centres do not preserve configured rod length.");
             Require(Mathf.Abs(visualAssembly.CylinderSpacingM - expectedSpacingM) <= PositionToleranceM,
                 "Visual assembly cylinder spacing does not derive from bore.");
+            Require(Mathf.Abs(visualAssembly.TimingCamToCrankSpeedRatio - 0.5f) <= PositionToleranceM,
+                "Timing-drive tooth definition does not preserve the 2:1 crank/cam ratio.");
 
             EngineCalculatedState expectedState = EngineCalculator.Calculate(controller.CreateConfiguration());
             Require(Math.Abs(controller.DisplacementLitres - expectedState.TotalDisplacementLitres) <= 1e-12,
@@ -250,21 +293,26 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
             Require(Mathf.Approximately(controller.EngineSpeedRpm, simulatedOperatingRpm),
                 "Teaching controls changed the simulated engine operating RPM.");
 
+            VerifyFunctionalValvetrain(visualAssembly);
+
             Transform generatedRoot = controller.transform.Find(GeneratedRootName);
             VerifyInspectionMode(visualAssembly, generatedRoot, EngineInspectionMode.FullEngine,
-                "Cylinder Block - Full", "Cylinder Head - Full", "Crankshaft External");
+                "Cylinder Block - Full", "Cylinder Head - Full", "Crankshaft External", "Timing Covers");
             VerifyInspectionMode(visualAssembly, generatedRoot, EngineInspectionMode.Cutaway,
                 "Cylinder Block - Cutaway", "Block Internals and Liners", "Cylinder Head - Cutaway",
                 "Head Chambers and Ports", "Crankshaft Internal", "Crankshaft External",
-                "Pistons and Forged Rods", "DOHC Valvetrain");
+                "Pistons and Forged Rods", "DOHC Valvetrain", "Timing Drive Internal", "Timing Covers",
+                "Airflow Teaching Paths", "Combustion Cycle Highlights");
             VerifyInspectionMode(visualAssembly, generatedRoot, EngineInspectionMode.TransparentBlockAndHead,
                 "Cylinder Block - Full", "Block Internals and Liners", "Cylinder Head - Full",
                 "Head Chambers and Ports", "Crankshaft Internal", "Crankshaft External",
-                "Pistons and Forged Rods", "DOHC Valvetrain");
+                "Pistons and Forged Rods", "DOHC Valvetrain", "Timing Drive Internal", "Timing Covers",
+                "Airflow Teaching Paths", "Combustion Cycle Highlights");
             VerifyInspectionMode(visualAssembly, generatedRoot, EngineInspectionMode.RotatingAssemblyOnly,
                 "Crankshaft Internal", "Crankshaft External", "Pistons and Forged Rods");
             VerifyInspectionMode(visualAssembly, generatedRoot, EngineInspectionMode.ValvetrainOnly,
-                "Head Chambers and Ports", "DOHC Valvetrain");
+                "Head Chambers and Ports", "DOHC Valvetrain", "Timing Drive Internal",
+                "Airflow Teaching Paths", "Combustion Cycle Highlights");
 
             visualAssembly.SetTeachingAnimationPlaying(originalPlaying);
             visualAssembly.SetTeachingAnimationRpm(originalTeachingRpm);
@@ -295,6 +343,67 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
                 "Reset Engine View did not restore the engine focus.");
             Require(Mathf.Abs(defaultDistance - inspectionCamera.DistanceM) <= PositionToleranceM,
                 "Reset Engine View did not restore the default zoom.");
+        }
+
+        private static void VerifyFunctionalValvetrain(InlineFourVisualFidelityAssembly visualAssembly)
+        {
+            Transform generatedRoot = visualAssembly.transform.Find(GeneratedRootName);
+            Transform intakeValve = FindDescendant(generatedRoot, "Intake moving valve 1-1");
+            Transform exhaustValve = FindDescendant(generatedRoot, "Exhaust moving valve 1-1");
+            Require(intakeValve != null && exhaustValve != null,
+                "Functional moving-valve transforms are missing.");
+
+            visualAssembly.SetCrankAngleDeg(350f);
+            Vector3 intakeClosedPosition = intakeValve.localPosition;
+            Require(Math.Abs(visualAssembly.GetNormalizedValveLift(0, ValveSide.Intake)) <= 1e-12,
+                "Intake valve did not close at its opening reference angle.");
+            visualAssembly.SetCrankAngleDeg(407.5f);
+            float openingTravelM = Vector3.Distance(intakeClosedPosition, intakeValve.localPosition);
+            Require(openingTravelM > 0f && visualAssembly.GetNormalizedValveLift(0, ValveSide.Intake) > 0.0,
+                "Intake valve did not translate during opening.");
+            visualAssembly.SetCrankAngleDeg(465f);
+            float peakTravelM = Vector3.Distance(intakeClosedPosition, intakeValve.localPosition);
+            Require(peakTravelM > openingTravelM
+                    && Math.Abs(visualAssembly.GetNormalizedValveLift(0, ValveSide.Intake) - 1.0) <= 1e-12,
+                "Intake valve did not reach deterministic peak lift.");
+            visualAssembly.SetCrankAngleDeg(522.5f);
+            float closingTravelM = Vector3.Distance(intakeClosedPosition, intakeValve.localPosition);
+            Require(closingTravelM > 0f && closingTravelM < peakTravelM,
+                "Intake valve did not translate through closing.");
+            visualAssembly.SetCrankAngleDeg(580f);
+            Require(Vector3.Distance(intakeClosedPosition, intakeValve.localPosition) <= PositionToleranceM,
+                "Intake valve did not return to its closed position.");
+
+            visualAssembly.SetCrankAngleDeg(255f);
+            Require(Math.Abs(visualAssembly.GetNormalizedValveLift(0, ValveSide.Exhaust) - 1.0) <= 1e-12,
+                "Exhaust valve did not reach deterministic peak lift.");
+
+            visualAssembly.SetCrankAngleDeg(40f);
+            float intakeCamStartDeg = visualAssembly.IntakeCamAngleDeg;
+            float exhaustCamStartDeg = visualAssembly.ExhaustCamAngleDeg;
+            visualAssembly.SetCrankAngleDeg(220f);
+            Require(Mathf.Abs(Mathf.DeltaAngle(intakeCamStartDeg, visualAssembly.IntakeCamAngleDeg) - 90f)
+                    <= PositionToleranceM,
+                "Intake camshaft did not rotate at half crankshaft speed.");
+            Require(Mathf.Abs(Mathf.DeltaAngle(exhaustCamStartDeg, visualAssembly.ExhaustCamAngleDeg) - 90f)
+                    <= PositionToleranceM,
+                "Exhaust camshaft did not rotate at half crankshaft speed.");
+
+            visualAssembly.SetCrankAngleDeg(90f);
+            Require(visualAssembly.GetCylinderPhase(0) == FourStrokePhase.Power,
+                "Cylinder 1 did not enter power phase at its reference angle.");
+            visualAssembly.SetCrankAngleDeg(270f);
+            Require(visualAssembly.GetCylinderPhase(0) == FourStrokePhase.Exhaust
+                    && visualAssembly.GetCylinderPhase(2) == FourStrokePhase.Power,
+                "Cylinder phases did not follow the 1-3 firing sequence.");
+            visualAssembly.SetCrankAngleDeg(450f);
+            Require(visualAssembly.GetCylinderPhase(0) == FourStrokePhase.Intake
+                    && visualAssembly.GetCylinderPhase(3) == FourStrokePhase.Power,
+                "Cylinder phases did not follow the 3-4 firing sequence.");
+            visualAssembly.SetCrankAngleDeg(630f);
+            Require(visualAssembly.GetCylinderPhase(0) == FourStrokePhase.Compression
+                    && visualAssembly.GetCylinderPhase(1) == FourStrokePhase.Power,
+                "Cylinder phases did not follow the 4-2 firing sequence.");
         }
 
         private static void VerifyInspectionMode(

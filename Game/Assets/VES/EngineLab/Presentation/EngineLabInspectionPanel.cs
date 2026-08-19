@@ -74,8 +74,8 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             }
 
             float crankAngleDeg = visualAssembly.CurrentCrankAngleDeg;
-            GUILayout.Label($"Crank angle: {crankAngleDeg:0.0}°");
-            float requestedAngleDeg = GUILayout.HorizontalSlider(crankAngleDeg, 0f, 360f);
+            GUILayout.Label($"Four-stroke crank cycle: {crankAngleDeg:0.0}° / 720°");
+            float requestedAngleDeg = GUILayout.HorizontalSlider(crankAngleDeg, 0f, 720f);
             if (!Mathf.Approximately(requestedAngleDeg, crankAngleDeg))
             {
                 visualAssembly.SetTeachingAnimationPlaying(false);

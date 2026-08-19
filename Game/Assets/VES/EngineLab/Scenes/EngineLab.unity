@@ -554,13 +554,24 @@ MonoBehaviour:
   headDepthBoreMultiplier: 1.68
   nominalCastingWallBoreMultiplier: 0.055
   deckThicknessBoreMultiplier: 0.045
-  pistonDiameterBoreMultiplier: 0.94
+  pistonDiameterBoreMultiplier: 0.97
   pistonCompressionHeightBoreMultiplier: 0.3
   pistonSkirtLengthBoreMultiplier: 0.48
   connectingRodBigEndOuterBoreMultiplier: 0.22
   connectingRodSmallEndOuterBoreMultiplier: 0.105
   valveIncludedAngleDeg: 20
   camshaftSpacingHeadDepthMultiplier: 0.4
+  maximumValveLiftBoreMultiplier: 0.105
+  intakeCamPhaseOffsetDeg: 105
+  exhaustCamPhaseOffsetDeg: -15
+  showAirflowPaths: 1
+  showCycleHighlights: 1
+  timingDriveDefinition:
+    driveType: 0
+    crankSprocketTeeth: 24
+    camSprocketTeeth: 48
+    visualChainThicknessM: 0.0045
+    movingMarkerCount: 28
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0

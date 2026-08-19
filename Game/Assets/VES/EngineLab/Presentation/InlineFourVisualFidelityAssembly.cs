@@ -23,7 +23,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
     [ExecuteAlways]
     [DisallowMultipleComponent]
     [RequireComponent(typeof(EngineLabController))]
-    public sealed class InlineFourVisualFidelityAssembly : MonoBehaviour
+    public sealed partial class InlineFourVisualFidelityAssembly : MonoBehaviour
     {
         private const string GeneratedRootName = "Generated I4 Visual Fidelity Assembly";
         private static readonly float[] CrankPhaseDeg = { 0f, 180f, 180f, 0f };
@@ -33,7 +33,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
         [Header("Teaching Animation (presentation only)")]
         [SerializeField] private bool animateInPlayMode = true;
         [SerializeField, Range(0f, 300f)] private float teachingAnimationRpm = 60f;
-        [SerializeField, Range(0f, 360f)] private float previewCrankAngleDeg = 28f;
+        [SerializeField, Range(0f, 720f)] private float previewCrankAngleDeg = 28f;
         [SerializeField] private EngineInspectionMode inspectionMode = EngineInspectionMode.FullEngine;
 
         [Header("Cast Assembly Assumptions (multiples of bore)")]
@@ -45,7 +45,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
         [SerializeField, Range(0.01f, 0.08f)] private float deckThicknessBoreMultiplier = 0.045f;
 
         [Header("Moving-Part Assumptions (multiples of bore)")]
-        [SerializeField, Range(0.82f, 0.98f)] private float pistonDiameterBoreMultiplier = 0.94f;
+        [SerializeField, Range(0.82f, 0.98f)] private float pistonDiameterBoreMultiplier = 0.97f;
         [SerializeField, Range(0.18f, 0.42f)] private float pistonCompressionHeightBoreMultiplier = 0.30f;
         [SerializeField, Range(0.30f, 0.70f)] private float pistonSkirtLengthBoreMultiplier = 0.48f;
         [SerializeField, Range(0.12f, 0.30f)] private float connectingRodBigEndOuterBoreMultiplier = 0.22f;
@@ -169,7 +169,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             {
                 animatedCrankAngleDeg = Mathf.Repeat(
                     animatedCrankAngleDeg + teachingAnimationRpm * 6f * Time.deltaTime,
-                    360f);
+                    720f);
                 angleDeg = animatedCrankAngleDeg;
             }
             else
@@ -184,7 +184,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
         public void SetTeachingAnimationPlaying(bool isPlaying)
         {
             if (animateInPlayMode && !isPlaying && Application.isPlaying)
-                previewCrankAngleDeg = Mathf.Repeat(animatedCrankAngleDeg, 360f);
+                previewCrankAngleDeg = Mathf.Repeat(animatedCrankAngleDeg, 720f);
             else if (!animateInPlayMode && isPlaying)
                 animatedCrankAngleDeg = previewCrankAngleDeg;
             animateInPlayMode = isPlaying;
@@ -197,7 +197,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
 
         public void SetCrankAngleDeg(float angleDeg)
         {
-            previewCrankAngleDeg = Mathf.Repeat(angleDeg, 360f);
+            previewCrankAngleDeg = Mathf.Repeat(angleDeg, 720f);
             animatedCrankAngleDeg = previewCrankAngleDeg;
             if (generatedRoot != null) UpdateMovingAssembly(previewCrankAngleDeg);
         }
@@ -247,6 +247,8 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             CreatePistonsAndConnectingRods();
             CreateCylinderHead();
             CreateValvetrain();
+            CreateTimingDrive();
+            CreateAirflowTeachingPaths();
             CreateLightingRig();
             UpdateMovingAssembly(previewCrankAngleDeg);
             ApplyInspectionMode();
@@ -290,10 +292,14 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             crankExternalGroup = CreateGroup("Crankshaft External");
             pistonsAndRodsGroup = CreateGroup("Pistons and Forged Rods");
             valvetrainGroup = CreateGroup("DOHC Valvetrain");
+            timingDriveGroup = CreateGroup("Timing Drive Internal");
+            timingCoverGroup = CreateGroup("Timing Covers");
+            airflowPathGroup = CreateGroup("Airflow Teaching Paths");
+            cycleHighlightGroup = CreateGroup("Combustion Cycle Highlights");
             lightingGroup = CreateGroup("Inspection Lighting");
         }
 
-        private void CreateCylinderBlock()
+        private void CreateCylinderBlockV1Reference()
         {
             float wallM = boreM * nominalCastingWallBoreMultiplier;
             float upperBottomYM = -crankRadiusM * 0.12f;
@@ -462,7 +468,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
                 railThicknessM * 0.65f, darkSteelMaterial, trackAsOpaqueBlock);
         }
 
-        private void CreateBlockInternals()
+        private void CreateBlockInternalsV1Reference()
         {
             float linerBottomYM = rodLengthM - crankRadiusM - pistonSkirtLengthM * 0.75f;
             float linerHeightM = deckYM - linerBottomYM;
@@ -506,7 +512,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             }
         }
 
-        private void CreateCrankshaft()
+        private void CreateCrankshaftV1Reference()
         {
             float mainJournalRadiusM = Mathf.Max(0.008f, strokeM * 0.10f);
             float rodJournalRadiusM = Mathf.Max(0.007f, strokeM * 0.085f);
@@ -581,7 +587,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
                 boreM * 0.40f, bearingMaterial, null);
         }
 
-        private void CreatePistonsAndConnectingRods()
+        private void CreatePistonsAndConnectingRodsV1Reference()
         {
             pistonAssemblies = new Transform[4];
             connectingRodAssemblies = new Transform[4];
@@ -697,7 +703,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
                 bossInnerRadiusM * 0.92f, machinedSteelMaterial, null);
         }
 
-        private void CreateCylinderHead()
+        private void CreateCylinderHeadV1Reference()
         {
             float headCentreYM = deckYM + headHeightM * 0.5f;
             float bevelM = boreM * 0.055f;
@@ -814,7 +820,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             }
         }
 
-        private void CreateValvetrain()
+        private void CreateValvetrainV1Reference()
         {
             camshaftRotors = new Transform[2];
             float camSpacingM = headDepthM * camshaftSpacingHeadDepthMultiplier;
@@ -932,12 +938,9 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
                 connectingRodAssemblies[i].localRotation = Quaternion.FromToRotation(Vector3.up, wristPin - crankPin);
             }
 
-            if (camshaftRotors == null) return;
-            float camAngleDeg = baseCrankAngleDeg * 0.5f;
-            foreach (Transform camshaft in camshaftRotors)
-            {
-                if (camshaft != null) camshaft.localRotation = Quaternion.Euler(camAngleDeg, 0f, 0f);
-            }
+            UpdateFunctionalValvetrain(baseCrankAngleDeg);
+            UpdateTimingDrive(baseCrankAngleDeg);
+            UpdateCycleHighlights(baseCrankAngleDeg);
         }
 
         private void ApplyInspectionMode()
@@ -959,6 +962,12 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             SetActive(crankExternalGroup, full || cutaway || transparent || rotatingOnly);
             SetActive(pistonsAndRodsGroup, cutaway || transparent || rotatingOnly);
             SetActive(valvetrainGroup, cutaway || transparent || valvetrainOnly);
+            SetActive(timingDriveGroup, cutaway || transparent || valvetrainOnly);
+            SetActive(timingCoverGroup, full || cutaway || transparent);
+            SetActive(airflowPathGroup,
+                showAirflowPaths && (cutaway || transparent || valvetrainOnly));
+            SetActive(cycleHighlightGroup,
+                showCycleHighlights && (cutaway || transparent || valvetrainOnly));
             SetActive(lightingGroup, true);
 
             foreach (Renderer renderer in opaqueBlockRenderers)
@@ -983,6 +992,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             darkCavityMaterial = CreateMaterial("Internal cavities", new Color(0.018f, 0.023f, 0.026f, 1f), 0.05f, 0.12f);
             transparentBlockMaterial = CreateMaterial("Transparent block", new Color(0.16f, 0.24f, 0.27f, 0.42f), 0.20f, 0.30f, true);
             transparentHeadMaterial = CreateMaterial("Transparent head", new Color(0.48f, 0.57f, 0.61f, 0.36f), 0.25f, 0.34f, true);
+            CreateV2Materials();
         }
 
         private static Material CreateMaterial(
@@ -1211,6 +1221,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             connectingRodSmallEndOuterBoreMultiplier = Mathf.Clamp(connectingRodSmallEndOuterBoreMultiplier, 0.05f, 0.16f);
             valveIncludedAngleDeg = Mathf.Clamp(valveIncludedAngleDeg, 8f, 28f);
             camshaftSpacingHeadDepthMultiplier = Mathf.Clamp(camshaftSpacingHeadDepthMultiplier, 0.18f, 0.42f);
+            previewCrankAngleDeg = Mathf.Repeat(previewCrankAngleDeg, 720f);
         }
 
         private void CleanupGenerated()
@@ -1233,6 +1244,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             opaqueHeadRenderers.Clear();
             blockOriginalMaterials.Clear();
             headOriginalMaterials.Clear();
+            CleanupV2State();
 
             DestroyMaterial(ref castIronMaterial);
             DestroyMaterial(ref castAluminumMaterial);
