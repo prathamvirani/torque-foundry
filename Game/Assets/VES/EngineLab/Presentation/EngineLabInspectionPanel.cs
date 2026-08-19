@@ -1,4 +1,6 @@
+using System.Text;
 using UnityEngine;
+using VehicleEngineeringSandbox.Core.ICE;
 
 namespace VehicleEngineeringSandbox.EngineLab.Presentation
 {
@@ -75,6 +77,18 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
 
             float crankAngleDeg = visualAssembly.CurrentCrankAngleDeg;
             GUILayout.Label($"Four-stroke crank cycle: {crankAngleDeg:0.0}° / 720°");
+            int firingCylinder = ValveTimingKinematics.CylinderAtFiringTdc(crankAngleDeg, 2f);
+            GUILayout.Label(firingCylinder >= 0
+                ? $"Firing TDC: cylinder {firingCylinder + 1}"
+                : "Firing TDC: —");
+            var phaseLine = new StringBuilder("Cylinder phases: ");
+            for (int cylinder = 0; cylinder < 4; cylinder++)
+            {
+                if (cylinder > 0) phaseLine.Append("  •  ");
+                phaseLine.Append('C').Append(cylinder + 1).Append(' ')
+                    .Append(visualAssembly.GetCylinderPhase(cylinder));
+            }
+            GUILayout.Label(phaseLine.ToString());
             float requestedAngleDeg = GUILayout.HorizontalSlider(crankAngleDeg, 0f, 720f);
             if (!Mathf.Approximately(requestedAngleDeg, crankAngleDeg))
             {
@@ -99,6 +113,10 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
                 inspectionCamera?.SetPivot(transform.TransformPoint(visualAssembly.RecommendedFocusPointLocal));
                 inspectionCamera?.SetDistance(visualAssembly.RecommendedCameraDistanceM);
             }
+            bool showDatums = GUILayout.Toggle(visualAssembly.ShowEngineeringDatums,
+                "Show mechanical datums (debug)");
+            if (showDatums != visualAssembly.ShowEngineeringDatums)
+                visualAssembly.SetEngineeringDatumsVisible(showDatums);
             GUILayout.EndArea();
         }
 

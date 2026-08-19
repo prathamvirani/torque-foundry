@@ -32,6 +32,7 @@ namespace VehicleEngineeringSandbox.Core.ICE
 
         // Original compact-I4 teaching order: cylinders 1-3-4-2 fire 180 degrees apart.
         private static readonly double[] FiringTdcCrankDeg = { 0.0, 540.0, 180.0, 360.0 };
+        private static readonly int[] FiringOrderCylinderIndices = { 0, 2, 3, 1 };
 
         public static double CamshaftAngleDeg(double crankCycleAngleDeg, double camPhaseOffsetDeg = 0.0)
         {
@@ -48,6 +49,27 @@ namespace VehicleEngineeringSandbox.Core.ICE
         {
             ValidateCylinderIndex(cylinderIndex);
             return FiringTdcCrankDeg[cylinderIndex];
+        }
+
+        public static int FiringOrderCylinderIndex(int firingIndex)
+        {
+            if (firingIndex < 0 || firingIndex >= FiringOrderCylinderIndices.Length)
+                throw new ArgumentOutOfRangeException(nameof(firingIndex));
+            return FiringOrderCylinderIndices[firingIndex];
+        }
+
+        public static int CylinderAtFiringTdc(double crankCycleAngleDeg, double toleranceDeg = 0.5)
+        {
+            if (toleranceDeg < 0.0 || toleranceDeg > 90.0)
+                throw new ArgumentOutOfRangeException(nameof(toleranceDeg));
+            double normalized = Normalize720(crankCycleAngleDeg);
+            for (int cylinder = 0; cylinder < FiringTdcCrankDeg.Length; cylinder++)
+            {
+                double difference = Math.Abs(normalized - FiringTdcCrankDeg[cylinder]);
+                difference = Math.Min(difference, 720.0 - difference);
+                if (difference <= toleranceDeg) return cylinder;
+            }
+            return -1;
         }
 
         public static FourStrokePhase CylinderPhase(double crankCycleAngleDeg, int cylinderIndex)

@@ -135,6 +135,27 @@ namespace VehicleEngineeringSandbox.Core.Validation
                 540.0,
                 ValveTimingKinematics.CylinderFiringTdcCrankDeg(1), 1e-12);
 
+            int[] expectedFiringOrder = { 0, 2, 3, 1 };
+            for (int firingIndex = 0; firingIndex < expectedFiringOrder.Length; firingIndex++)
+            {
+                Add(report, $"ENG-CYCLE-{firingIndex + 8:000}",
+                    $"Firing-order position {firingIndex + 1} maps to cylinder {expectedFiringOrder[firingIndex] + 1}",
+                    expectedFiringOrder[firingIndex],
+                    ValveTimingKinematics.FiringOrderCylinderIndex(firingIndex), 0.0);
+            }
+
+            double auditAngleRad = 37.0 * Math.PI / 180.0;
+            double oppositeAngleRad = auditAngleRad + Math.PI;
+            double pair14HeightM = SliderCrankKinematics.PistonPinHeightM(auditAngleRad, crankRadiusM, rodLengthM);
+            double pair23HeightM = SliderCrankKinematics.PistonPinHeightM(oppositeAngleRad, crankRadiusM, rodLengthM);
+            Add(report, "ENG-KIN-002", "I4 cylinders 1 and 4 share piston phase",
+                pair14HeightM, SliderCrankKinematics.PistonPinHeightM(auditAngleRad, crankRadiusM, rodLengthM), 1e-12);
+            Add(report, "ENG-KIN-003", "I4 cylinders 2 and 3 share the opposite piston phase",
+                pair23HeightM, SliderCrankKinematics.PistonPinHeightM(oppositeAngleRad, crankRadiusM, rodLengthM), 1e-12);
+
+            Add(report, "ENG-CYCLE-012", "720 degrees returns to cylinder 1 firing TDC",
+                0.0, ValveTimingKinematics.CylinderAtFiringTdc(720.0, 1e-9), 0.0);
+
             return report;
         }
 

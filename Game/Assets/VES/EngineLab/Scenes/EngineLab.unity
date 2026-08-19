@@ -561,6 +561,7 @@ MonoBehaviour:
   connectingRodSmallEndOuterBoreMultiplier: 0.105
   valveIncludedAngleDeg: 20
   camshaftSpacingHeadDepthMultiplier: 0.4
+  showEngineeringDatums: 0
   maximumValveLiftBoreMultiplier: 0.105
   intakeCamPhaseOffsetDeg: 105
   exhaustCamPhaseOffsetDeg: -15

@@ -15,7 +15,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
     }
 
     /// <summary>
-    /// Semi-realistic procedural inline-four assembly for Visual Fidelity Pass v1.
+    /// Semi-realistic procedural inline-four assembly for Visual Fidelity Pass v2.
     /// Bore, stroke, rod length, spacing, phasing and slider-crank positions come
     /// from the authoritative controller/Core model. Every other dimension below
     /// is an explicitly named presentation assumption and never feeds simulation.
@@ -114,6 +114,8 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
         private float headDepthM;
         private float pistonCompressionHeightM;
         private float pistonSkirtLengthM;
+        private float rotatingAssemblyRequiredHalfDepthM;
+        private float crankcaseAvailableHalfDepthM;
 
         public string GeneratedHierarchyName => GeneratedRootName;
         public bool IsTeachingAnimationPlaying => animateInPlayMode;
@@ -123,6 +125,8 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             : previewCrankAngleDeg;
         public EngineInspectionMode InspectionMode => inspectionMode;
         public float CylinderSpacingM => spacingM;
+        public float RotatingAssemblyRequiredHalfDepthM => rotatingAssemblyRequiredHalfDepthM;
+        public float CrankcaseAvailableHalfDepthM => crankcaseAvailableHalfDepthM;
         public Vector3 RecommendedFocusPointLocal => inspectionMode == EngineInspectionMode.ValvetrainOnly
             ? new Vector3(0f, deckYM + headHeightM * 0.65f, 0f)
             : inspectionMode == EngineInspectionMode.RotatingAssemblyOnly
@@ -234,11 +238,12 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
 
             if (controller.CylinderCount != 4)
             {
-                Debug.LogWarning("Visual Fidelity Pass v1 currently supports a four-cylinder inline layout only.", this);
+                Debug.LogWarning("The Engine Lab visual-fidelity assembly currently supports a four-cylinder inline layout only.", this);
                 return;
             }
 
             CalculatePresentationDimensions();
+            BuildMechanicalDatums();
             CreateMaterials();
             CreateHierarchy();
             CreateCylinderBlock();
@@ -250,6 +255,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             CreateTimingDrive();
             CreateAirflowTeachingPaths();
             CreateLightingRig();
+            CreateEngineeringDatumVisualization();
             UpdateMovingAssembly(previewCrankAngleDeg);
             ApplyInspectionMode();
         }
@@ -268,7 +274,19 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             deckYM = tdcPinYM + pistonCompressionHeightM + boreM * deckThicknessBoreMultiplier;
             blockBottomYM = -crankRadiusM - boreM * crankcaseDepthBelowAxisBoreMultiplier;
             blockLengthM = spacingM * 3f + boreM * 1.62f;
-            blockDepthM = boreM * blockDepthBoreMultiplier;
+            float castingWallM = boreM * nominalCastingWallBoreMultiplier;
+            float bigEndOuterRadiusM = boreM * connectingRodBigEndOuterBoreMultiplier;
+            float rotatingClearanceM = boreM * 0.04f;
+            rotatingAssemblyRequiredHalfDepthM = crankRadiusM + bigEndOuterRadiusM + rotatingClearanceM;
+            // The retained cutaway wall reaches only about 90% of the nominal half-depth
+            // around the crank sweep. Size the casting from the moving envelope so the rod
+            // big ends cannot pass through that wall at maximum Z throw.
+            const float minimumCrankcaseProfileDepthFactor = 0.90f;
+            float envelopeDrivenBlockDepthM = 2f * (rotatingAssemblyRequiredHalfDepthM + castingWallM)
+                                              / minimumCrankcaseProfileDepthFactor;
+            blockDepthM = Mathf.Max(boreM * blockDepthBoreMultiplier, envelopeDrivenBlockDepthM);
+            crankcaseAvailableHalfDepthM = blockDepthM * 0.5f * minimumCrankcaseProfileDepthFactor
+                                           - castingWallM;
             headHeightM = boreM * headHeightBoreMultiplier;
             headDepthM = boreM * headDepthBoreMultiplier;
 
@@ -297,6 +315,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             airflowPathGroup = CreateGroup("Airflow Teaching Paths");
             cycleHighlightGroup = CreateGroup("Combustion Cycle Highlights");
             lightingGroup = CreateGroup("Inspection Lighting");
+            engineeringDatumGroup = CreateGroup("Engineering Datums");
         }
 
         private void CreateCylinderBlockV1Reference()
@@ -969,6 +988,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             SetActive(cycleHighlightGroup,
                 showCycleHighlights && (cutaway || transparent || valvetrainOnly));
             SetActive(lightingGroup, true);
+            SetActive(engineeringDatumGroup, showEngineeringDatums);
 
             foreach (Renderer renderer in opaqueBlockRenderers)
                 if (renderer != null) renderer.sharedMaterial = transparent

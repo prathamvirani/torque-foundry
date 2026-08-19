@@ -201,7 +201,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
 
             for (int bearing = 0; bearing < 5; bearing++)
             {
-                float x = (bearing - 2f) * spacingM;
+                float x = mainBearingCentersLocal[bearing].x;
                 CreateSweptPart($"Rounded lower main bay {bearing + 1}", parent,
                     new[]
                     {
@@ -296,7 +296,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
 
         private void CreateTimingAndBellhousingCastings(Transform parent, bool fullCasting)
         {
-            timingFrontXM = -blockLengthM * 0.5f - boreM * 0.13f;
+            // The timing-case casting wraps the shared front/timing datum; it does not define it.
             float halfDepthM = blockDepthM * 0.5f;
             Vector2[] timingProfile = ProceduralEngineMeshFactory.CreateRoundedPolygonProfile(
                 new[]
@@ -343,7 +343,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             float frontSurfaceZ = -blockDepthM * 0.51f;
             for (int bearing = 0; bearing < 5; bearing++)
             {
-                float x = (bearing - 2f) * spacingM;
+                float x = mainBearingCentersLocal[bearing].x;
                 CreateSweptPart($"Cast crankcase rib {bearing + 1}", parent,
                     new[]
                     {
@@ -469,7 +469,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             {
                 var rotor = new GameObject($"Curved crank throw {cylinder + 1}").transform;
                 rotor.SetParent(crankInternalGroup, false);
-                rotor.localPosition = new Vector3(cylinderXM[cylinder], 0f, 0f);
+                rotor.localPosition = cylinderBoreCentersLocal[cylinder];
                 throwRotors[cylinder] = rotor;
 
                 CreateCylinderBetween($"Rod journal {cylinder + 1}", rotor,
@@ -503,7 +503,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
                 }
             }
 
-            float frontX = -blockLengthM * 0.5f;
+            float frontX = frontEngineFaceXM;
             CreateCylinderBetween("Crankshaft front snout", crankExternalGroup,
                 new Vector3(frontX - boreM * 0.34f, 0f, 0f), new Vector3(frontX, 0f, 0f),
                 mainRadiusM * 0.72f, machinedSteelMaterial, null);
@@ -515,7 +515,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
                     boreM * (0.27f - ring * 0.025f), ring == 1 ? gasketMaterial : darkSteelMaterial, null);
             }
 
-            float rearX = blockLengthM * 0.5f;
+            float rearX = rearEngineFaceXM;
             CreateCylinderBetween("Rear crank flange", crankExternalGroup,
                 new Vector3(rearX, 0f, 0f), new Vector3(rearX + boreM * 0.12f, 0f, 0f),
                 boreM * 0.25f, machinedSteelMaterial, null);
@@ -629,8 +629,8 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
                 pistonAluminumMaterial, null);
             for (int boss = -1; boss <= 1; boss += 2)
                 CreateCylinderBetween($"Piston pin boss {cylinder + 1}-{(boss + 3) / 2}", parent,
-                    new Vector3(boss * diameterM * 0.12f, -boreM * 0.10f, 0f),
-                    new Vector3(boss * diameterM * 0.34f, -boreM * 0.10f, 0f),
+                    new Vector3(boss * diameterM * 0.12f, 0f, 0f),
+                    new Vector3(boss * diameterM * 0.34f, 0f, 0f),
                     boreM * 0.105f, pistonAluminumMaterial, null);
             CreateCylinderBetween($"Wrist pin {cylinder + 1}", parent,
                 new Vector3(-diameterM * 0.42f, 0f, 0f), new Vector3(diameterM * 0.42f, 0f, 0f),
@@ -763,14 +763,17 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
         private void CreateValvetrain()
         {
             maximumValveLiftM = boreM * maximumValveLiftBoreMultiplier;
-            camshaftYM = deckYM + headHeightM * 0.74f;
-            intakeCamZM = headDepthM * camshaftSpacingHeadDepthMultiplier * 0.5f;
-            exhaustCamZM = -intakeCamZM;
             camshaftRotors = new Transform[2];
             intakeValves = new Transform[8];
             exhaustValves = new Transform[8];
             intakeSprings = new Transform[8];
             exhaustSprings = new Transform[8];
+            intakeFollowers = new Transform[8];
+            exhaustFollowers = new Transform[8];
+            intakeSpringClosedScales = new Vector3[8];
+            exhaustSpringClosedScales = new Vector3[8];
+            intakeSpringClosedLengthsM = new float[8];
+            exhaustSpringClosedLengthsM = new float[8];
             intakeValveClosedPositions = new Vector3[8];
             exhaustValveClosedPositions = new Vector3[8];
             intakeValveAxes = new Vector3[8];
@@ -799,14 +802,14 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             Transform rotor = CreateGroup($"{prefix} camshaft rotor", valvetrainGroup);
             rotor.localPosition = new Vector3(0f, camshaftYM, z);
             camshaftRotors[camIndex] = rotor;
-            float radiusM = boreM * 0.065f;
+            float radiusM = camBaseRadiusM;
             CreateCylinderBetween($"{prefix} camshaft", rotor,
                 new Vector3(-blockLengthM * 0.54f, 0f, 0f),
                 new Vector3(blockLengthM * 0.54f, 0f, 0f), radiusM,
                 darkSteelMaterial, null);
             for (int cap = 0; cap < 5; cap++)
             {
-                float x = (cap - 2f) * spacingM;
+                float x = mainBearingCentersLocal[cap].x;
                 CreateCylinderBetween($"{prefix} cam journal {cap + 1}", rotor,
                     new Vector3(x - boreM * 0.075f, 0f, 0f),
                     new Vector3(x + boreM * 0.075f, 0f, 0f), radiusM * 1.15f,
@@ -817,13 +820,18 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             {
                 float x = cylinderXM[cylinder] + (valve == 0 ? -1f : 1f) * boreM * 0.16f;
                 Transform lobe = CreateEllipsoid($"{prefix} cam lobe {cylinder + 1}-{valve + 1}", rotor,
-                    new Vector3(x, 0f, 0f), new Vector3(boreM * 0.12f, boreM * 0.19f, boreM * 0.13f),
+                    new Vector3(x, 0f, 0f),
+                    new Vector3(boreM * 0.12f, (camBaseRadiusM + maximumValveLiftM) * 2f, camBaseRadiusM * 2f),
                     darkSteelMaterial, null);
                 double peakCrankDeg = side == ValveSide.Intake
                     ? ValveTimingKinematics.IntakePeakLiftCrankDeg
                     : ValveTimingKinematics.ExhaustPeakLiftCrankDeg;
-                float lobeClockingDeg = (float)(ValveTimingKinematics.CylinderFiringTdcCrankDeg(cylinder) * 0.5
-                                                + peakCrankDeg * 0.5);
+                float camPhaseDeg = side == ValveSide.Intake ? intakeCamPhaseOffsetDeg : exhaustCamPhaseOffsetDeg;
+                float camAngleAtPeakDeg = (float)ValveTimingKinematics.CamshaftAngleDeg(
+                    ValveTimingKinematics.CylinderFiringTdcCrankDeg(cylinder) + peakCrankDeg, camPhaseDeg);
+                Vector3 valveAxis = GetValveAxisLocal(cylinder, valve, side);
+                float contactDirectionDeg = Mathf.Atan2(-valveAxis.z, -valveAxis.y) * Mathf.Rad2Deg;
+                float lobeClockingDeg = contactDirectionDeg - camAngleAtPeakDeg;
                 lobe.localRotation = Quaternion.Euler(lobeClockingDeg, 0f, 0f);
             }
         }
@@ -833,27 +841,31 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             bool intake = side == ValveSide.Intake;
             int flatIndex = cylinder * 2 + valve;
             float bankSign = intake ? 1f : -1f;
-            float x = cylinderXM[cylinder] + (valve == 0 ? -1f : 1f) * boreM * 0.16f;
-            float halfAngleRad = valveIncludedAngleDeg * 0.5f * Mathf.Deg2Rad;
-            Vector3 axis = new Vector3(0f, Mathf.Cos(halfAngleRad), bankSign * Mathf.Sin(halfAngleRad)).normalized;
-            Vector3 seat = new Vector3(x, deckYM + boreM * 0.06f, bankSign * boreM * 0.13f);
+            Vector3 seat = GetValveSeatLocal(cylinder, valve, side);
+            Vector3 axis = GetValveAxisLocal(cylinder, valve, side);
+            float x = seat.x;
             string prefix = intake ? "Intake" : "Exhaust";
 
             Transform movingValve = CreateGroup($"{prefix} moving valve {cylinder + 1}-{valve + 1}", valvetrainGroup);
             movingValve.localPosition = seat;
             movingValve.localRotation = Quaternion.FromToRotation(Vector3.up, axis);
-            float stemLengthM = headHeightM * 0.70f;
             CreateCylinderBetween($"{prefix} valve stem {cylinder + 1}-{valve + 1}", movingValve,
-                Vector3.zero, Vector3.up * stemLengthM, boreM * 0.016f, machinedSteelMaterial, null);
+                Vector3.zero, Vector3.up * valveStemLengthM, boreM * 0.016f, machinedSteelMaterial, null);
             CreateCylinderBetween($"{prefix} valve head {cylinder + 1}-{valve + 1}", movingValve,
-                Vector3.down * boreM * 0.025f, Vector3.up * boreM * 0.006f,
+                Vector3.down * boreM * 0.031f, Vector3.zero,
                 boreM * (intake ? 0.105f : 0.092f), machinedSteelMaterial, null);
             CreateCylinderBetween($"{prefix} spring retainer {cylinder + 1}-{valve + 1}", movingValve,
-                Vector3.up * stemLengthM * 0.81f, Vector3.up * stemLengthM * 0.86f,
+                Vector3.up * valveStemLengthM * 0.91f, Vector3.up * valveStemLengthM * 0.97f,
                 boreM * 0.075f, bearingMaterial, null);
 
-            float springBottomM = stemLengthM * 0.46f;
-            float springLengthM = stemLengthM * 0.38f;
+            Transform follower = CreateGroup($"{prefix} direct bucket follower {cylinder + 1}-{valve + 1}", movingValve);
+            follower.localPosition = Vector3.up * valveStemLengthM;
+            CreateCylinderBetween($"{prefix} bucket body {cylinder + 1}-{valve + 1}", follower,
+                Vector3.zero, Vector3.up * valveFollowerThicknessM,
+                boreM * 0.070f, bearingMaterial, null);
+
+            float springBottomM = valveStemLengthM * 0.40f;
+            float springLengthM = valveStemLengthM * 0.54f;
             Transform springRoot = CreateGroup($"{prefix} compressing spring {cylinder + 1}-{valve + 1}", valvetrainGroup);
             springRoot.localPosition = seat + axis * springBottomM;
             springRoot.localRotation = Quaternion.FromToRotation(Vector3.up, axis);
@@ -869,6 +881,9 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             {
                 intakeValves[flatIndex] = movingValve;
                 intakeSprings[flatIndex] = springRoot;
+                intakeFollowers[flatIndex] = follower;
+                intakeSpringClosedScales[flatIndex] = springRoot.localScale;
+                intakeSpringClosedLengthsM[flatIndex] = springLengthM;
                 intakeValveClosedPositions[flatIndex] = seat;
                 intakeValveAxes[flatIndex] = axis;
             }
@@ -876,6 +891,9 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             {
                 exhaustValves[flatIndex] = movingValve;
                 exhaustSprings[flatIndex] = springRoot;
+                exhaustFollowers[flatIndex] = follower;
+                exhaustSpringClosedScales[flatIndex] = springRoot.localScale;
+                exhaustSpringClosedLengthsM[flatIndex] = springLengthM;
                 exhaustValveClosedPositions[flatIndex] = seat;
                 exhaustValveAxes[flatIndex] = axis;
             }
@@ -883,14 +901,20 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             Vector3 opening = new Vector3(x, deckYM + headHeightM * (intake ? 0.43f : 0.36f),
                 bankSign * headDepthM * 0.58f);
             Vector3 bowl = seat + new Vector3(0f, boreM * 0.055f, bankSign * boreM * 0.025f);
-            Vector3[] path = CreateQuadraticPath(opening,
+            Vector3[] runnerPath = CreateQuadraticPath(opening,
                 new Vector3(x, deckYM + headHeightM * (intake ? 0.52f : 0.44f),
                     bankSign * headDepthM * 0.37f), bowl, 7);
+            Vector3[] path = new Vector3[runnerPath.Length + 1];
+            Array.Copy(runnerPath, path, runnerPath.Length);
+            path[path.Length - 1] = seat;
             var definition = new PortPathDefinition(cylinder, valve, side, path);
             if (intake) intakePortPaths.Add(definition); else exhaustPortPaths.Add(definition);
 
             CreateSweptPart($"{prefix} curved port runner {cylinder + 1}-{valve + 1}", headInternalsGroup,
-                path, boreM * (intake ? 0.078f : 0.068f), boreM * (intake ? 0.065f : 0.058f),
+                runnerPath, boreM * (intake ? 0.078f : 0.068f), boreM * (intake ? 0.065f : 0.058f),
+                intake ? intakePortMaterial : exhaustPortMaterial, null);
+            CreateSweptPart($"{prefix} valve-seat throat {cylinder + 1}-{valve + 1}", headInternalsGroup,
+                new[] { bowl, seat }, boreM * (intake ? 0.066f : 0.058f), boreM * 0.052f,
                 intake ? intakePortMaterial : exhaustPortMaterial, null);
             CreateSweptPart($"{prefix} external port opening {cylinder + 1}-{valve + 1}", headInternalsGroup,
                 new[] { opening, opening + Vector3.forward * (bankSign * boreM * 0.055f) },
@@ -903,7 +927,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
 
         private void CreateCombustionChamberV2(int cylinder)
         {
-            Vector3 centre = new Vector3(cylinderXM[cylinder], deckYM + boreM * 0.035f, 0f);
+            Vector3 centre = combustionChamberCentersLocal[cylinder];
             CreateEllipsoid($"Pent-roof combustion chamber {cylinder + 1}", headInternalsGroup,
                 centre, new Vector3(boreM * 0.90f, boreM * 0.16f, boreM * 0.79f),
                 darkCavityMaterial, null);
@@ -924,9 +948,9 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
                 return;
             }
 
-            crankTimingSprocketRadiusM = boreM * 0.17f;
+            crankTimingSprocketRadiusM = boreM * 0.105f;
             float camSprocketRadiusM = crankTimingSprocketRadiusM * 2f;
-            float x = timingFrontXM - boreM * 0.095f;
+            float x = timingDrivePlaneXM;
             crankTimingSprocket = CreateSprocket("Crank timing sprocket", timingDriveGroup,
                 new Vector3(x, 0f, 0f), crankTimingSprocketRadiusM, timingDriveDefinition.CrankSprocketTeeth);
             intakeCamSprocket = CreateSprocket("Intake cam sprocket and phaser", timingDriveGroup,
@@ -1073,9 +1097,11 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
                 {
                     int index = cylinder * 2 + valve;
                     UpdateValveState(intakeValves, intakeSprings, intakeValveClosedPositions,
-                        intakeValveAxes, index, intakeLiftM);
+                        intakeValveAxes, intakeSpringClosedScales, intakeSpringClosedLengthsM,
+                        index, intakeLiftM);
                     UpdateValveState(exhaustValves, exhaustSprings, exhaustValveClosedPositions,
-                        exhaustValveAxes, index, exhaustLiftM);
+                        exhaustValveAxes, exhaustSpringClosedScales, exhaustSpringClosedLengthsM,
+                        index, exhaustLiftM);
                 }
             }
         }
@@ -1085,16 +1111,18 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             Transform[] springs,
             Vector3[] closedPositions,
             Vector3[] axes,
+            Vector3[] closedSpringScales,
+            float[] closedSpringLengthsM,
             int index,
             float liftM)
         {
             if (valves == null || index >= valves.Length || valves[index] == null) return;
             valves[index].localPosition = closedPositions[index] - axes[index] * liftM;
             if (springs == null || springs[index] == null) return;
-            float closedVisualLengthM = 0.04f;
-            float compressionRatio = Mathf.Clamp01(1f - liftM / closedVisualLengthM);
-            Vector3 scale = springs[index].localScale;
-            scale.y = Mathf.Max(0.58f, compressionRatio);
+            float closedVisualLengthM = Mathf.Max(0.000001f, closedSpringLengthsM[index]);
+            float compressionRatio = Mathf.Clamp(1f - liftM / closedVisualLengthM, 0.45f, 1f);
+            Vector3 scale = closedSpringScales[index];
+            scale.y *= compressionRatio;
             springs[index].localScale = scale;
         }
 
@@ -1179,6 +1207,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             timingCoverGroup = null;
             airflowPathGroup = null;
             cycleHighlightGroup = null;
+            engineeringDatumGroup = null;
             crankTimingSprocket = null;
             intakeCamSprocket = null;
             exhaustCamSprocket = null;
@@ -1190,6 +1219,12 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             exhaustValves = null;
             intakeSprings = null;
             exhaustSprings = null;
+            intakeFollowers = null;
+            exhaustFollowers = null;
+            intakeSpringClosedScales = null;
+            exhaustSpringClosedScales = null;
+            intakeSpringClosedLengthsM = null;
+            exhaustSpringClosedLengthsM = null;
             cycleHighlightRenderers = null;
             DestroyMaterial(ref castAluminumDarkMaterial);
             DestroyMaterial(ref chainMaterial);
