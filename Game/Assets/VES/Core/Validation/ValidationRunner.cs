@@ -20,6 +20,7 @@ namespace VehicleEngineeringSandbox.Core.Validation
     public sealed class ValidationReport
     {
         public readonly List<ValidationResult> results = new List<ValidationResult>();
+
         public int PassedCount
         {
             get
@@ -29,6 +30,9 @@ namespace VehicleEngineeringSandbox.Core.Validation
                 return n;
             }
         }
+
+        public int FailedCount => results.Count - PassedCount;
+        public bool AllPassed => FailedCount == 0;
     }
 
     public static class ValidationRunner
@@ -36,6 +40,7 @@ namespace VehicleEngineeringSandbox.Core.Validation
         public static ValidationReport RunFoundationChecks()
         {
             var report = new ValidationReport();
+
             Add(report, "ENG-GEO-001", "86 x 86 mm four-cylinder displacement",
                 1.9982288568717088,
                 EngineGeometry.TotalDisplacementLitres(86.0, 86.0, 4), 1e-12);
@@ -49,6 +54,17 @@ namespace VehicleEngineeringSandbox.Core.Validation
             Add(report, "ENG-GEO-003", "Compression-ratio round trip",
                 10.0,
                 EngineGeometry.CompressionRatio(swept, clearance), 1e-12);
+
+            var configuration = EngineConfiguration.FromMillimetres(86.0, 86.0, 4, 10.0, 7000.0);
+            var state = EngineCalculator.Calculate(configuration);
+
+            Add(report, "ENG-CALC-001", "Configuration-to-state displacement",
+                1.9982288568717088,
+                state.TotalDisplacementLitres, 1e-12);
+
+            Add(report, "ENG-CALC-002", "Configuration-to-state mean piston speed",
+                20.066666666666666,
+                state.MeanPistonSpeedMps, 1e-12);
 
             return report;
         }
