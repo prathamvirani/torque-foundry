@@ -41,7 +41,7 @@ The active block, lower ladder, oil pan, head, cam cover, timing case, and bellh
 | Presentation quantity | v2 assumption | Scope |
 |---|---:|---|
 | Cylinder spacing | `1.15 × bore` | Existing inline-four presentation layout |
-| Block depth | `1.50 × bore` | Compact aluminium cylinder bank and crankcase |
+| Block depth | minimum `1.50 × bore`, expanded by crank/big-end envelope | Retained-wall clearance around the rotating assembly |
 | Head depth | `1.68 × bore` | Paired ports, 20° included valve angle, and DOHC carrier |
 | Head height | `0.82 × bore` | Compact pent-roof DOHC package |
 | Piston diameter | `0.97 × bore` | Readable running clearance, not a tolerance model |
@@ -84,7 +84,7 @@ The idealized fixed timing events are:
 | Exhaust | `140°` | `255°` | `370°` |
 | Intake | `350°` | `465°` | `580°` |
 
-Lift follows a smooth half-cosine opening and closing curve with zero velocity at the endpoints and peak. This is deterministic teaching kinematics, not a cam-design, lash, follower-contact, spring-force, VTC, VTEC, deformation, surge, or dynamic model.
+Lift follows a smooth half-cosine opening and closing curve with zero velocity at the endpoints and peak. A direct bucket is now positioned geometrically between every lobe and valve, but this remains deterministic teaching kinematics rather than cam-design, lash/contact-force, spring-force, VTC, VTEC, deformation, surge, or dynamic simulation.
 
 Both camshafts rotate at exactly half crankshaft angular speed. Presentation clocking offsets are `+105°` intake and `-15°` exhaust. Valve stems, heads, and retainers translate along their valve axes; spring stacks shorten visually with lift.
 
@@ -110,7 +110,7 @@ Validity limits:
 - four-cylinder inline layout only
 - plausible compact passenger-car bore/stroke/rod proportions
 - fixed idealized valve timing and lift profile
-- teaching/game geometry rather than OEM CAD, casting feasibility, stress, mass, flow, thermal, lubrication, collision-clearance, or tolerance analysis
+- teaching/game geometry rather than OEM CAD, casting feasibility, stress, mass, flow, thermal, lubrication, general collision detection, or tolerance analysis; only the documented crankcase rotating-envelope clearance is asserted
 - timing chain only in the current renderer
 
 At 86 mm bore × 86 mm stroke × 143 mm rod length, authoritative displacement remains approximately `1.9982288569 L`, slider-crank locations remain unchanged, and all presentation geometry is disposable and rebuildable.

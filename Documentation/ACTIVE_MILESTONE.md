@@ -6,7 +6,9 @@
 
 **Active branch:** `feature/engine-lab-foundation`
 
-**Verification note:** On 2026-08-20, the dedicated scene passed its Visual Fidelity Pass v2 validator in a normal licensed Unity 6000.5.8f1 editor session using D3D12. The scene opened cleanly, the Engine Lab root remained reset, all bore/stroke/rod-length rebuild cases passed without stale generated meshes, the Console had zero red errors, and five captured inspection views verified the lofted casting, traceable paired ports, functional valvetrain, timing chain, and unchanged rotating assembly.
+**Current gate:** Mechanical Alignment & Kinematic Correctness Pass completed. New feature development and Engine Lab UI work remain frozen until the user explicitly lifts the gate.
+
+**Verification note:** On 2026-08-20, the dedicated scene passed its strengthened alignment validator in a normal licensed Unity 6000.5.8f1 editor session using D3D12. The Engine Lab root remained reset; all bore/stroke/rod-length rebuilds replaced generated meshes cleanly; the authoritative 86 × 86 × 143 mm state remained 1.9982288569 L; and actual generated transforms passed bore/piston/wrist-pin/rod/crank-pin, main-bearing, valve-seat/lift/spring/follower, port, timing-plane, and crankcase-clearance assertions. Twenty-four fixed-camera regression views were captured at 0/90/180/360/540/720 degrees. A separate continuous 720-degree Play Mode audit visually sampled every rendered intake and exhaust valve opening and closing and completed with zero red Console errors.
 
 The current milestone is to turn the initial validated engine geometry into a usable Engine Lab: a configurable reciprocating engine with authoritative pure-C# calculations and a live Unity 3D teaching/inspection presentation.
 
@@ -105,6 +107,14 @@ The active game-facing presentation now supersedes the v1 compression-box aesthe
 
 Authoritative bore, stroke, rod length, cylinder spacing, crank phasing, slider-crank positions, cycle phase, and valve-lift kinematics originate in the controller/Core path. Visual proportions and validity limits are documented in `Documentation/ENGINE_LAB_VISUAL_FIDELITY_V2.md`; they never feed back into simulation state. The v1 document remains as history for the superseded prototype.
 
+### Mechanical alignment and kinematic correctness
+
+`Game/Assets/VES/EngineLab/Presentation/InlineFourVisualFidelityAssemblyAlignment.cs`
+
+The complete generated assembly now shares one documented local coordinate system and a single datum set for crankshaft, bores, bearings, deck, chambers, valves, cams, timing plane, and engine faces. Piston bosses are coaxial with wrist pins; rods preserve exact configured center distance between authoritative crank pins and wrist pins; main journals share bearing centers; and the retained crankcase wall is sized from the big-end rotating envelope plus casting wall and clearance rather than clipping the mechanism.
+
+Sixteen direct bucket followers provide a legible cam-lobe-to-valve path. Rendered valve heads seat on explicit datums, move along valve axes by the configured lift, and drive spring compression. Port throats terminate at those same seats, and all timing sprockets share the shaft/timing datums. An optional disabled-by-default engineering datum overlay supports visual debugging. Assumptions and validity limits are documented in `Documentation/ENGINE_LAB_MECHANICAL_ALIGNMENT.md`.
+
 ### Prototype/reference presentation
 
 `Game/Assets/VES/EngineLab/Presentation/InlineFourVisualizer.cs`
@@ -130,7 +140,7 @@ They are no longer the active game presentation and should not constrain later f
 
 `Game/Assets/VES/EngineLab/Scenes/EngineLab.unity`
 
-The dedicated scene contains the controller and Visual Fidelity Pass v1 assembly on a root transform at zero position/rotation and unit scale. The template `SampleScene` remains untouched and is not used for Engine Lab development.
+The dedicated scene contains the controller and Visual Fidelity Pass v2 assembly on a root transform at zero position/rotation and unit scale. The template `SampleScene` remains untouched and is not used for Engine Lab development.
 
 ### Inspection camera and teaching controls
 
@@ -178,7 +188,8 @@ Work in this order unless the user redirects:
    - five purpose-built inspection modes with mode-aware focus/framing
    - completed: normal-editor scene validation and targeted Play Mode check with zero Console errors
 
-5. **Create the first proper Engine Lab UI — explicitly deferred during Visual Fidelity Pass v2**
+5. **Create the first proper Engine Lab UI — blocked by the current user scope freeze**
+   - do not begin until the user explicitly lifts the Mechanical Alignment gate
    - bore
    - stroke
    - rod length
