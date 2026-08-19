@@ -6,6 +6,8 @@
 
 **Active branch:** `feature/engine-lab-foundation`
 
+**Verification note:** The dedicated scene has a repeatable editor verifier, but the latest unattended Unity batch attempt was blocked before project execution by the local Unity Licensing Client repeatedly losing its channel. Source compilation and pure-C# validation can still be run independently; the scene verifier must be rerun once the editor has a working licensed session.
+
 The current milestone is to turn the initial validated engine geometry into a usable Engine Lab: a configurable reciprocating engine with authoritative pure-C# calculations and a live Unity 3D teaching/inspection presentation.
 
 Do not expand into whole-vehicle systems yet.
@@ -62,6 +64,10 @@ The presentation should derive piston and rod motion from the actual slider-cran
 
 Foundation reference cases cover displacement, mean piston speed, compression-ratio round trips, configuration-to-state calculations, and slider-crank behavior.
 
+`Game/Assets/VES/EngineLab/Editor/EngineLabSceneValidation.cs`
+
+The repeatable editor validation opens the dedicated scene, checks its root transform and script references, and exercises bore/stroke/rod-length changes to confirm the mechanism and context replace their generated hierarchies without stale state.
+
 ### Unity adapter
 
 `Game/Assets/VES/EngineLab/Runtime/EngineLabController.cs`
@@ -78,7 +84,8 @@ The first procedural inline-four mechanism is working in Unity with:
 - wrist pins
 - connecting rods
 - crank pins/throws
-- crankshaft presentation
+- five main journals
+- four crank pins with paired webs and counterweights
 - bore/cylinder guides
 - conventional I4 phasing: cylinders 1/4 together and 2/3 180° opposite
 - editor preview crank angle
@@ -86,27 +93,46 @@ The first procedural inline-four mechanism is working in Unity with:
 
 The visualizer is intentionally an engineering skeleton, not final art.
 
+### Dedicated Engine Lab scene
+
+`Game/Assets/VES/EngineLab/Scenes/EngineLab.unity`
+
+The dedicated scene contains the controller, I4 mechanism, and Engine Lab presentation context on a root transform at zero position/rotation and unit scale. The template `SampleScene` is no longer used for Engine Lab development.
+
+### Engine block and head context
+
+`Game/Assets/VES/EngineLab/Presentation/InlineFourEngineContextVisualizer.cs`
+
+The presentation now provides independently inspectable generated groups for:
+
+- a camera-facing cutaway block envelope
+- four parameter-driven cutaway cylinder liners
+- a deck-plane frame around the bores
+- a camera-facing cutaway cylinder-head envelope
+
+This context is a teaching and spatial-reference aid, not a structural, thermal, casting, combustion-chamber, or mass model. Bore, stroke, rod length, and shared cylinder spacing drive its rebuild; block depth, head height, liner wall, and cutaway proportions remain explicitly presentation-only. The current validity limit is the inline-four prototype.
+
 ## Immediate next steps
 
 Work in this order unless the user redirects:
 
-1. **Repository/scene hygiene**
-   - ensure Unity-generated `.meta` files for all new tracked scripts/folders are committed
-   - create/save a dedicated Engine Lab scene under `Game/Assets/VES/EngineLab/Scenes/EngineLab.unity`
-   - stop using template `SampleScene` as the long-term development scene
-   - ensure the Engine Lab root transform is `(0,0,0)` / zero rotation / unit scale
+1. **Repository/scene hygiene — completed**
+   - required Unity `.meta` files for tracked scripts/folders are committed
+   - the dedicated Engine Lab scene is stored under `Game/Assets/VES/EngineLab/Scenes/EngineLab.unity`
+   - template `SampleScene` has been restored and is no longer the Engine Lab development scene
+   - the Engine Lab root is serialized at `(0,0,0)` / zero rotation / unit scale
 
-2. **Improve the procedural mechanical model**
-   - make crankshaft geometry mechanically legible: main journals, crank pins, webs/counterweights
-   - improve connecting-rod and piston proportions while keeping geometry parameter-driven
+2. **Improve the procedural mechanical model — in progress**
+   - completed: mechanically legible main journals, crank pins, paired webs, and counterweights
+   - remaining: improve connecting-rod and piston proportions while keeping geometry parameter-driven
    - keep crank/piston kinematics authoritative to the core geometry
    - avoid turning presentation dimensions into hidden simulation inputs
 
-3. **Add engine-block/cylinder-head context**
-   - simple configurable block envelope
-   - visible cylinders/liners or cutaway bores
-   - deck plane and head envelope
-   - keep cutaway/isolation-friendly hierarchy
+3. **Add engine-block/cylinder-head context — completed**
+   - configurable presentation-only block envelope
+   - four visible cutaway cylinder liners
+   - deck-plane frame and cutaway head envelope
+   - separate generated groups retain crank/rod/piston inspection access
 
 4. **Add useful inspection controls**
    - orbit/zoom/focus camera suitable for an engineering lab
@@ -123,10 +149,10 @@ Work in this order unless the user redirects:
    - RPM operating point
    - live calculated displacement, piston speed, ratios, and warnings
 
-6. **Strengthen automated validation**
+6. **Strengthen automated validation — in progress**
    - add a Unity Test Framework or similarly repeatable test path for core calculations
    - cover slider-crank endpoints and symmetry
-   - verify changes to geometry inputs rebuild presentation without stale state
+   - completed: editor validation for scene integrity and geometry-input rebuilds without stale presentation state
 
 7. **Prepare basic dyno milestone**
    - only after geometry/scene/UI foundation is stable

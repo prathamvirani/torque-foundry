@@ -49,6 +49,8 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
         private Material pistonMaterial;
         private Material guideMaterial;
 
+        public float CylinderSpacingBoreMultiplier => cylinderSpacingBoreMultiplier;
+
         private void Reset()
         {
             controller = GetComponent<EngineLabController>();

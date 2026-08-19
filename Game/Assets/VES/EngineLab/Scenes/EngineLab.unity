@@ -394,6 +394,7 @@ GameObject:
   - component: {fileID: 493637034}
   - component: {fileID: 493637033}
   - component: {fileID: 493637035}
+  - component: {fileID: 493637036}
   m_Layer: 0
   m_Name: Engine Lab
   m_TagString: Untagged
@@ -442,6 +443,27 @@ MonoBehaviour:
   previewCrankAngleDeg: 0
   cylinderSpacingBoreMultiplier: 1.15
   showBoreGuides: 1
+--- !u!114 &493637036
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 493637032}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 72e1e33d3469469aab5308815f405481, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::VehicleEngineeringSandbox.EngineLab.Presentation.InlineFourEngineContextVisualizer
+  controller: {fileID: 493637033}
+  mechanismVisualizer: {fileID: 493637035}
+  showBlockEnvelope: 1
+  showCylinderLiners: 1
+  showDeckPlane: 1
+  showHeadEnvelope: 1
+  blockDepthBoreMultiplier: 1.35
+  headHeightBoreMultiplier: 0.65
+  linerCutawayAngleDeg: 100
 --- !u!4 &493637034
 Transform:
   m_ObjectHideFlags: 0
