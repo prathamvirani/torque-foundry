@@ -31,7 +31,8 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
         private Transform[] wristPins;
         private Transform[] connectingRods;
         private Transform[] crankPins;
-        private Transform[] crankWebs;
+        private Transform[,] crankWebs;
+        private Transform[,] counterweights;
         private float[] cylinderX;
 
         private float lastBoreMm = -1f;
@@ -144,17 +145,9 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             wristPins = new Transform[4];
             connectingRods = new Transform[4];
             crankPins = new Transform[4];
-            crankWebs = new Transform[4];
+            crankWebs = new Transform[4, 2];
+            counterweights = new Transform[4, 2];
             cylinderX = new float[4];
-
-            float engineLengthM = spacingM * 3f + boreM * 1.4f;
-            float crankShaftRadiusM = Mathf.Max(0.006f, strokeM * 0.09f);
-            CreateCylinderBetween(
-                "Crankshaft",
-                new Vector3(-engineLengthM * 0.5f, 0f, 0f),
-                new Vector3(engineLengthM * 0.5f, 0f, 0f),
-                crankShaftRadiusM,
-                crankMaterial);
 
             float pistonDiameterM = boreM * 0.90f;
             float pistonHeightM = Mathf.Clamp(strokeM * 0.28f, 0.012f, 0.045f);
@@ -163,6 +156,9 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             float rodRadiusM = Mathf.Max(0.0035f, boreM * 0.045f);
             float webRadiusM = Mathf.Max(0.004f, strokeM * 0.06f);
             float pinLengthM = boreM * 0.64f;
+            float webAxialOffsetM = pinLengthM * 0.5f + Mathf.Max(0.002f, boreM * 0.035f);
+
+            CreateMainJournals(spacingM, boreM, strokeM);
 
             for (int i = 0; i < 4; i++)
             {
@@ -184,16 +180,30 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
                     rodMaterial);
                 crankPins[i] = CreateCylinderBetween(
                     $"Crank Pin {i + 1}",
-                    new Vector3(x - pinLengthM * 0.42f, 0f, 0f),
-                    new Vector3(x + pinLengthM * 0.42f, 0f, 0f),
+                    new Vector3(x - pinLengthM * 0.5f, 0f, 0f),
+                    new Vector3(x + pinLengthM * 0.5f, 0f, 0f),
                     crankPinRadiusM,
                     crankMaterial);
-                crankWebs[i] = CreateCylinderBetween(
-                    $"Crank Web {i + 1}",
-                    new Vector3(x, 0f, 0f),
-                    new Vector3(x, crankRadiusM, 0f),
-                    webRadiusM,
-                    crankMaterial);
+
+                for (int side = 0; side < 2; side++)
+                {
+                    string sideName = side == 0 ? "Front" : "Rear";
+                    float webX = x + (side == 0 ? -webAxialOffsetM : webAxialOffsetM);
+                    Vector3 crankCentre = new Vector3(webX, 0f, 0f);
+
+                    crankWebs[i, side] = CreateCylinderBetween(
+                        $"Crank Web {i + 1} {sideName}",
+                        crankCentre,
+                        crankCentre + Vector3.up * crankRadiusM,
+                        webRadiusM,
+                        crankMaterial);
+                    counterweights[i, side] = CreateCylinderBetween(
+                        $"Counterweight {i + 1} {sideName}",
+                        crankCentre,
+                        crankCentre + Vector3.down * crankRadiusM * 0.78f,
+                        webRadiusM * 1.35f,
+                        crankMaterial);
+                }
 
                 if (showBoreGuides)
                     CreateBoreGuides(i + 1, x, boreM, strokeM, rodLengthM, pistonHeightM);
@@ -209,6 +219,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
             float rodLengthM = Mathf.Max(controller.ConnectingRodLengthMm / 1000f, crankRadiusM + 0.000001f);
             float boreM = Mathf.Max(0.001f, controller.BoreMm / 1000f);
             float pinLengthM = boreM * 0.64f;
+            float webAxialOffsetM = pinLengthM * 0.5f + Mathf.Max(0.002f, boreM * 0.035f);
 
             for (int i = 0; i < 4; i++)
             {
@@ -230,9 +241,38 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
                     new Vector3(x + pinLengthM * 0.5f, pistonPinY, 0f));
                 SetCylinderBetween(connectingRods[i], crankPin, wristPin);
                 SetCylinderBetween(crankPins[i],
-                    crankPin + Vector3.left * pinLengthM * 0.42f,
-                    crankPin + Vector3.right * pinLengthM * 0.42f);
-                SetCylinderBetween(crankWebs[i], crankCentre, crankPin);
+                    crankPin + Vector3.left * pinLengthM * 0.5f,
+                    crankPin + Vector3.right * pinLengthM * 0.5f);
+
+                Vector3 crankOffset = crankPin - crankCentre;
+                for (int side = 0; side < 2; side++)
+                {
+                    float webX = x + (side == 0 ? -webAxialOffsetM : webAxialOffsetM);
+                    Vector3 webCrankCentre = new Vector3(webX, 0f, 0f);
+                    Vector3 webCrankPin = webCrankCentre + crankOffset;
+                    Vector3 counterweightTip = webCrankCentre - crankOffset * 0.78f;
+
+                    SetCylinderBetween(crankWebs[i, side], webCrankCentre, webCrankPin);
+                    SetCylinderBetween(counterweights[i, side], webCrankCentre, counterweightTip);
+                }
+            }
+        }
+
+        private void CreateMainJournals(float spacingM, float boreM, float strokeM)
+        {
+            float journalRadiusM = Mathf.Max(0.006f, strokeM * 0.09f);
+            float journalLengthM = Mathf.Clamp(boreM * 0.24f, 0.012f, spacingM * 0.35f);
+
+            // An inline-four conventionally has five main bearings bracketing four crank throws.
+            for (int i = 0; i < 5; i++)
+            {
+                float x = (i - 2f) * spacingM;
+                CreateCylinderBetween(
+                    $"Main Journal {i + 1}",
+                    new Vector3(x - journalLengthM * 0.5f, 0f, 0f),
+                    new Vector3(x + journalLengthM * 0.5f, 0f, 0f),
+                    journalRadiusM,
+                    crankMaterial);
             }
         }
 
