@@ -180,7 +180,7 @@ Camera:
     height: 1
   near clip plane: 0.01
   far clip plane: 1000
-  field of view: 60
+  field of view: 45
   orthographic: 0
   orthographic size: 5
   m_Depth: -1
@@ -206,8 +206,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 330585543}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0.15, z: -0.7}
+  m_LocalRotation: {x: 0.10047921, y: 0.2741274, z: -0.02881195, w: 0.9559958}
+  m_LocalPosition: {x: -0.40430462, y: 0.24217111, z: -0.6470226}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -271,10 +271,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::VehicleEngineeringSandbox.EngineLab.Presentation.EngineLabInspectionCamera
   focusTarget: {fileID: 493637034}
   inputBlocker: {fileID: 493637037}
-  focusOffset: {x: 0, y: 0.15, z: 0}
-  defaultYawDeg: 0
-  defaultPitchDeg: 0
-  defaultDistanceM: 0.7
+  focusOffset: {x: 0, y: 0.08, z: 0}
+  defaultYawDeg: 32
+  defaultPitchDeg: 12
+  defaultDistanceM: 0.78
   minimumDistanceM: 0.22
   maximumDistanceM: 2.2
   minimumPitchDeg: -35
@@ -312,7 +312,7 @@ Light:
   serializedVersion: 13
   m_Type: 1
   m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_Intensity: 2
+  m_Intensity: 1.2
   m_Range: 10
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208
@@ -423,6 +423,7 @@ GameObject:
   - component: {fileID: 493637035}
   - component: {fileID: 493637036}
   - component: {fileID: 493637037}
+  - component: {fileID: 493637038}
   m_Layer: 0
   m_Name: Engine Lab
   m_TagString: Untagged
@@ -475,7 +476,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 493637032}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 7c9668ed2af4cfa46a4868d9ed30a105, type: 3}
   m_Name:
@@ -495,7 +496,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 493637032}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 72e1e33d3469469aab5308815f405481, type: 3}
   m_Name:
@@ -522,15 +523,44 @@ MonoBehaviour:
   m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::VehicleEngineeringSandbox.EngineLab.Presentation.EngineLabInspectionPanel
   controller: {fileID: 493637033}
-  mechanismVisualizer: {fileID: 493637035}
-  contextVisualizer: {fileID: 493637036}
+  visualAssembly: {fileID: 493637038}
   inspectionCamera: {fileID: 330585548}
   panelRect:
     serializedVersion: 2
     x: 16
     y: 16
-    width: 330
-    height: 510
+    width: 350
+    height: 535
+--- !u!114 &493637038
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 493637032}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 11c4809f64ec44b39bf1eb386c815408, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::VehicleEngineeringSandbox.EngineLab.Presentation.InlineFourVisualFidelityAssembly
+  controller: {fileID: 493637033}
+  animateInPlayMode: 1
+  teachingAnimationRpm: 60
+  previewCrankAngleDeg: 28
+  inspectionMode: 0
+  blockDepthBoreMultiplier: 1.5
+  crankcaseDepthBelowAxisBoreMultiplier: 0.72
+  headHeightBoreMultiplier: 0.82
+  headDepthBoreMultiplier: 1.68
+  nominalCastingWallBoreMultiplier: 0.055
+  deckThicknessBoreMultiplier: 0.045
+  pistonDiameterBoreMultiplier: 0.94
+  pistonCompressionHeightBoreMultiplier: 0.3
+  pistonSkirtLengthBoreMultiplier: 0.48
+  connectingRodBigEndOuterBoreMultiplier: 0.22
+  connectingRodSmallEndOuterBoreMultiplier: 0.105
+  valveIncludedAngleDeg: 20
+  camshaftSpacingHeadDepthMultiplier: 0.4
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0

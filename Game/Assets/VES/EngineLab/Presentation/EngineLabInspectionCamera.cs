@@ -45,6 +45,8 @@ namespace VehicleEngineeringSandbox.EngineLab.Presentation
         public float DistanceM => distanceM;
         public float MinimumDistanceM => minimumDistanceM;
         public float MaximumDistanceM => maximumDistanceM;
+        public float MinimumPitchDeg => minimumPitchDeg;
+        public float MaximumPitchDeg => maximumPitchDeg;
 
         private void Reset()
         {

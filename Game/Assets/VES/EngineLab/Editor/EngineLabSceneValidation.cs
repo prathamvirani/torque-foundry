@@ -10,14 +10,10 @@ using VehicleEngineeringSandbox.EngineLab.Presentation;
 
 namespace VehicleEngineeringSandbox.EngineLab.Editor
 {
-    /// <summary>
-    /// Repeatable editor validation for the dedicated Engine Lab scene and its
-    /// disposable presentation hierarchy. This is intentionally outside Core.
-    /// </summary>
     public static class EngineLabSceneValidation
     {
         private const string ScenePath = "Assets/VES/EngineLab/Scenes/EngineLab.unity";
-        private const string GeneratedRootName = "Generated I4 Mechanism";
+        private const string GeneratedRootName = "Generated I4 Visual Fidelity Assembly";
         private const string InteractiveValidationArgument = "-torqueFoundryValidateEngineLab";
         private const string InteractiveValidationSessionKey = "TorqueFoundry.EngineLabInteractiveValidationRan";
         private const float PositionToleranceM = 0.00001f;
@@ -27,11 +23,7 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
         {
             if (Application.isBatchMode
                 || SessionState.GetBool(InteractiveValidationSessionKey, false)
-                || Array.IndexOf(Environment.GetCommandLineArgs(), InteractiveValidationArgument) < 0)
-            {
-                return;
-            }
-
+                || Array.IndexOf(Environment.GetCommandLineArgs(), InteractiveValidationArgument) < 0) return;
             SessionState.SetBool(InteractiveValidationSessionKey, true);
             EditorApplication.delayCall += RunRequestedInteractiveValidation;
         }
@@ -77,12 +69,10 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
                 ClearConsole();
                 Require(EditorApplication.ExecuteMenuItem("Torque Foundry/Validate Engine Lab Scene"),
                     "Engine Lab validation menu command could not be executed.");
-
                 int consoleErrorCount = GetConsoleErrorCount();
                 Require(consoleErrorCount == 0,
                     $"Unity Console contained {consoleErrorCount} red error(s) after scene validation.");
-
-                string screenshotPath = CaptureInspectionScreenshot();
+                string screenshotPath = CaptureInspectionScreenshots();
                 AppendReport($"Interactive editor verification PASSED: Console red errors = 0.\n"
                              + $"Inspection screenshot: {screenshotPath}");
                 Debug.Log("Interactive Engine Lab verification PASSED: validator passed and Console has zero red errors.");
@@ -101,7 +91,6 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
         {
             Scene scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
             Require(scene.IsValid() && scene.isLoaded, "Dedicated Engine Lab scene did not open.");
-
             GameObject root = GameObject.Find("Engine Lab");
             Require(root != null && root.scene == scene, "Engine Lab root was not found in the dedicated scene.");
             Require(root.transform.parent == null, "Engine Lab must remain a scene root.");
@@ -110,220 +99,177 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
             Require(Approximately(root.transform.localScale, Vector3.one), "Engine Lab root scale is not one.");
 
             EngineLabController controller = root.GetComponent<EngineLabController>();
-            InlineFourVisualizer visualizer = root.GetComponent<InlineFourVisualizer>();
-            InlineFourEngineContextVisualizer contextVisualizer = root.GetComponent<InlineFourEngineContextVisualizer>();
+            InlineFourVisualizer prototypeMechanism = root.GetComponent<InlineFourVisualizer>();
+            InlineFourEngineContextVisualizer prototypeContext = root.GetComponent<InlineFourEngineContextVisualizer>();
+            InlineFourVisualFidelityAssembly visualAssembly = root.GetComponent<InlineFourVisualFidelityAssembly>();
             EngineLabInspectionPanel inspectionPanel = root.GetComponent<EngineLabInspectionPanel>();
             EngineLabInspectionCamera inspectionCamera = UnityEngine.Object.FindAnyObjectByType<EngineLabInspectionCamera>();
             Require(controller != null, "Engine Lab root is missing EngineLabController.");
-            Require(visualizer != null, "Engine Lab root is missing InlineFourVisualizer.");
-            Require(contextVisualizer != null, "Engine Lab root is missing InlineFourEngineContextVisualizer.");
+            Require(prototypeMechanism != null && !prototypeMechanism.enabled,
+                "Prototype mechanism must remain present as a disabled reference implementation.");
+            Require(prototypeContext != null && !prototypeContext.enabled,
+                "Prototype block context must remain present as a disabled reference implementation.");
+            Require(visualAssembly != null, "Engine Lab root is missing InlineFourVisualFidelityAssembly.");
             Require(inspectionPanel != null, "Engine Lab root is missing EngineLabInspectionPanel.");
             Require(inspectionCamera != null, "Dedicated scene is missing EngineLabInspectionCamera.");
             Require(CountMissingScripts(scene) == 0, "The dedicated scene contains missing MonoBehaviour scripts.");
 
             var controllerObject = new SerializedObject(controller);
-            var visualizerObject = new SerializedObject(visualizer);
             float originalBoreMm = ReadFloat(controllerObject, "boreMm");
             float originalStrokeMm = ReadFloat(controllerObject, "strokeMm");
             float originalRodLengthMm = ReadFloat(controllerObject, "connectingRodLengthMm");
-            float originalPreviewAngleDeg = ReadFloat(visualizerObject, "previewCrankAngleDeg");
-
+            float originalPreviewAngleDeg = visualAssembly.CurrentCrankAngleDeg;
+            EngineInspectionMode originalInspectionMode = visualAssembly.InspectionMode;
             Transform previousGeneratedRoot = null;
-            Transform previousContextRoot = null;
             const float previewAngleDeg = 37f;
-            SetFloat(visualizerObject, "previewCrankAngleDeg", previewAngleDeg);
-            visualizerObject.ApplyModifiedPropertiesWithoutUndo();
-
-            VerifyRebuild(controller, visualizer, contextVisualizer, controllerObject, 86f, 86f, 143f,
-                previewAngleDeg, ref previousGeneratedRoot, ref previousContextRoot);
-            VerifyRebuild(controller, visualizer, contextVisualizer, controllerObject, 92f, 86f, 150f,
-                previewAngleDeg, ref previousGeneratedRoot, ref previousContextRoot);
-            VerifyRebuild(controller, visualizer, contextVisualizer, controllerObject, 84f, 94f, 155f,
-                previewAngleDeg, ref previousGeneratedRoot, ref previousContextRoot);
+            visualAssembly.SetCrankAngleDeg(previewAngleDeg);
+            VerifyRebuild(controller, visualAssembly, controllerObject, 86f, 86f, 143f,
+                previewAngleDeg, ref previousGeneratedRoot);
+            VerifyRebuild(controller, visualAssembly, controllerObject, 92f, 86f, 150f,
+                previewAngleDeg, ref previousGeneratedRoot);
+            VerifyRebuild(controller, visualAssembly, controllerObject, 84f, 94f, 155f,
+                previewAngleDeg, ref previousGeneratedRoot);
 
             SetFloat(controllerObject, "boreMm", originalBoreMm);
             SetFloat(controllerObject, "strokeMm", originalStrokeMm);
             SetFloat(controllerObject, "connectingRodLengthMm", originalRodLengthMm);
             controllerObject.ApplyModifiedPropertiesWithoutUndo();
-            SetFloat(visualizerObject, "previewCrankAngleDeg", originalPreviewAngleDeg);
-            visualizerObject.ApplyModifiedPropertiesWithoutUndo();
             controller.Recalculate();
-            visualizer.RebuildPreview();
-            contextVisualizer.RebuildPreview();
-            VerifyPresentationControls(controller, visualizer, contextVisualizer, inspectionCamera);
-
+            visualAssembly.SetCrankAngleDeg(originalPreviewAngleDeg);
+            visualAssembly.RebuildPreview();
+            visualAssembly.SetInspectionMode(originalInspectionMode);
+            VerifyPresentationControls(controller, visualAssembly, inspectionCamera);
             Require(EditorSceneManager.SaveScene(scene), "Dedicated Engine Lab scene could not be saved after validation.");
-
             return "Engine Lab scene validation PASSED: scene opened, compile completed, root transform reset, "
-                   + "no missing scripts, bore/stroke/rod-length rebuild cases replaced the generated I4 hierarchy correctly, "
-                   + "and bounded camera, teaching-state, and inspection-visibility controls behaved deterministically.";
+                   + "no missing scripts, authoritative 86 x 86 x 143 mm state and slider-crank positions remained unchanged, "
+                   + "the Visual Fidelity Pass v1 assembly rebuilt from all geometry cases, and all five inspection modes, "
+                   + "bounded camera controls, and teaching-state isolation behaved deterministically.";
         }
 
         private static void VerifyRebuild(
             EngineLabController controller,
-            InlineFourVisualizer visualizer,
-            InlineFourEngineContextVisualizer contextVisualizer,
+            InlineFourVisualFidelityAssembly visualAssembly,
             SerializedObject controllerObject,
             float boreMm,
             float strokeMm,
             float rodLengthMm,
             float previewAngleDeg,
-            ref Transform previousGeneratedRoot,
-            ref Transform previousContextRoot)
+            ref Transform previousGeneratedRoot)
         {
             SetFloat(controllerObject, "boreMm", boreMm);
             SetFloat(controllerObject, "strokeMm", strokeMm);
             SetFloat(controllerObject, "connectingRodLengthMm", rodLengthMm);
             controllerObject.ApplyModifiedPropertiesWithoutUndo();
-
             controller.Recalculate();
-            visualizer.RebuildPreview();
-            contextVisualizer.RebuildPreview();
-
+            visualAssembly.RebuildPreview();
             Transform generatedRoot = controller.transform.Find(GeneratedRootName);
-            Require(generatedRoot != null, $"Generated hierarchy missing for {boreMm} x {strokeMm} mm geometry.");
+            Require(generatedRoot != null, $"Generated fidelity hierarchy missing for {boreMm} x {strokeMm} mm geometry.");
             Require(previousGeneratedRoot == null || generatedRoot != previousGeneratedRoot,
-                "Rebuild reused a stale generated hierarchy.");
+                "Visual-fidelity rebuild reused a stale generated hierarchy.");
             previousGeneratedRoot = generatedRoot;
 
-            Require(generatedRoot.childCount == 3, "Expected three independently inspectable mechanism groups.");
-            RequireGroupChildCount(generatedRoot, "Rotating Assembly", 25);
-            RequireGroupChildCount(generatedRoot, "Pistons and Rods", 12);
-            RequireGroupChildCount(generatedRoot, "Bore Guides", 16);
-            Require(CountChildrenWithPrefix(generatedRoot, "Piston ") == 4, "Expected four pistons.");
-            Require(CountChildrenWithPrefix(generatedRoot, "Connecting Rod ") == 4, "Expected four connecting rods.");
-            Require(CountChildrenWithPrefix(generatedRoot, "Crank Pin ") == 4, "Expected four crank pins.");
-            Require(CountChildrenWithPrefix(generatedRoot, "Main Journal ") == 5, "Expected five main journals.");
-            Require(CountChildrenWithPrefix(generatedRoot, "Crank Web ") == 8, "Expected paired crank webs per throw.");
-            Require(CountChildrenWithPrefix(generatedRoot, "Counterweight ") == 8, "Expected paired counterweights per throw.");
-            Require(CountChildrenWithPrefix(generatedRoot, "Cylinder ") == 16, "Expected four bore guides per cylinder.");
+            Require(generatedRoot.childCount == 11, "Expected eleven independently inspectable fidelity groups.");
+            RequireGroupMinimum(generatedRoot, "Cylinder Block - Full", 20);
+            RequireGroupMinimum(generatedRoot, "Cylinder Block - Cutaway", 18);
+            RequireGroupMinimum(generatedRoot, "Block Internals and Liners", 25);
+            RequireGroupMinimum(generatedRoot, "Cylinder Head - Full", 10);
+            RequireGroupMinimum(generatedRoot, "Cylinder Head - Cutaway", 10);
+            RequireGroupMinimum(generatedRoot, "Head Chambers and Ports", 20);
+            RequireGroupMinimum(generatedRoot, "Crankshaft Internal", 15);
+            RequireGroupMinimum(generatedRoot, "Crankshaft External", 5);
+            RequireGroupMinimum(generatedRoot, "Pistons and Forged Rods", 40);
+            RequireGroupMinimum(generatedRoot, "DOHC Valvetrain", 80);
+            Require(CountChildrenWithPrefix(generatedRoot, "Cylinder liner ") == 4, "Expected four cutaway liners.");
+            Require(CountChildrenWithPrefix(generatedRoot, "Main-bearing bulkhead ") == 5,
+                "Expected five main-bearing bulkheads and saddles.");
+            Require(CountChildrenWithPrefix(generatedRoot, "Main journal ") == 5, "Expected five main journals.");
+            Require(CountChildrenWithPrefix(generatedRoot, "Crank throw ") == 4, "Expected four crank throws.");
+            Require(CountChildrenWithPrefix(generatedRoot, "Piston assembly ") == 4, "Expected four detailed pistons.");
+            Require(CountChildrenWithPrefix(generatedRoot, "Forged connecting rod ") == 4,
+                "Expected four forged connecting rods.");
+            Require(CountChildrenWithPrefix(generatedRoot, "Pent-roof combustion chamber ") == 4,
+                "Expected four combustion-chamber regions.");
+            Require(CountChildrenWithPrefix(generatedRoot, "Cam lobe ") == 16, "Expected sixteen DOHC cam lobes.");
+            Require(CountChildrenWithPrefix(generatedRoot, "Intake valve stem ") == 8, "Expected eight intake valves.");
+            Require(CountChildrenWithPrefix(generatedRoot, "Exhaust valve stem ") == 8, "Expected eight exhaust valves.");
 
-            Transform contextRoot = controller.transform.Find(contextVisualizer.GeneratedHierarchyName);
-            Require(contextRoot != null, "Generated block/head context hierarchy is missing.");
-            Require(previousContextRoot == null || contextRoot != previousContextRoot,
-                "Context rebuild reused a stale generated hierarchy.");
-            previousContextRoot = contextRoot;
-            Require(contextRoot.childCount == 4, "Expected four independently inspectable context groups.");
-            RequireGroupChildCount(contextRoot, "Block Envelope", 4);
-            RequireGroupChildCount(contextRoot, "Cylinder Liners", 4);
-            RequireGroupChildCount(contextRoot, "Deck Plane", 7);
-            RequireGroupChildCount(contextRoot, "Cylinder Head Envelope", 4);
-
-            Transform piston1 = generatedRoot.Find("Pistons and Rods/Piston 1");
-            Transform piston2 = generatedRoot.Find("Pistons and Rods/Piston 2");
-            Transform connectingRod1 = generatedRoot.Find("Pistons and Rods/Connecting Rod 1");
-            Require(piston1 != null && piston2 != null && connectingRod1 != null, "Primary mechanism objects are missing.");
-
+            Transform piston1 = FindDescendant(generatedRoot, "Piston assembly 1");
+            Transform piston2 = FindDescendant(generatedRoot, "Piston assembly 2");
+            Transform connectingRod1 = FindDescendant(generatedRoot, "Forged connecting rod 1");
+            Require(piston1 != null && piston2 != null && connectingRod1 != null,
+                "Primary high-fidelity mechanism objects are missing.");
             float boreM = boreMm / 1000f;
             float strokeM = strokeMm / 1000f;
             float crankRadiusM = strokeM * 0.5f;
             float rodLengthM = rodLengthMm / 1000f;
             float expectedSpacingM = boreM * 1.15f;
             float expectedPistonPinYM = (float)SliderCrankKinematics.PistonPinHeightM(
-                previewAngleDeg * Mathf.Deg2Rad,
-                crankRadiusM,
-                rodLengthM);
-
+                previewAngleDeg * Mathf.Deg2Rad, crankRadiusM, rodLengthM);
             float actualSpacingM = piston2.localPosition.x - piston1.localPosition.x;
             Require(Mathf.Abs(actualSpacingM - expectedSpacingM) <= PositionToleranceM,
                 $"Cylinder spacing did not rebuild from bore: expected {expectedSpacingM:R} m, actual {actualSpacingM:R} m.");
-            Require(Mathf.Abs(piston1.localScale.x - boreM * 0.90f) <= PositionToleranceM,
-                "Piston diameter did not rebuild from bore.");
             Require(Mathf.Abs(piston1.localPosition.y - expectedPistonPinYM) <= PositionToleranceM,
-                "Piston position does not match authoritative slider-crank geometry.");
-            Require(Mathf.Abs(connectingRod1.localScale.y * 2f - rodLengthM) <= PositionToleranceM,
-                "Connecting-rod presentation length does not match configured geometry.");
+                "Piston pin position does not match authoritative slider-crank geometry.");
+            Vector3 smallEndWorld = connectingRod1.TransformPoint(Vector3.up * rodLengthM);
+            Require(Vector3.Distance(smallEndWorld, piston1.position) <= PositionToleranceM,
+                "Forged connecting-rod eye centres do not preserve configured rod length.");
+            Require(Mathf.Abs(visualAssembly.CylinderSpacingM - expectedSpacingM) <= PositionToleranceM,
+                "Visual assembly cylinder spacing does not derive from bore.");
 
             EngineCalculatedState expectedState = EngineCalculator.Calculate(controller.CreateConfiguration());
             Require(Math.Abs(controller.DisplacementLitres - expectedState.TotalDisplacementLitres) <= 1e-12,
                 "Controller displacement is stale after a geometry rebuild.");
             Require(Math.Abs(controller.RodStrokeRatio - expectedState.RodStrokeRatio) <= 1e-12,
                 "Controller rod/stroke ratio is stale after a geometry rebuild.");
-        }
-
-        private static int CountMissingScripts(Scene scene)
-        {
-            int missingCount = 0;
-            foreach (GameObject sceneRoot in scene.GetRootGameObjects())
+            if (Mathf.Approximately(boreMm, 86f) && Mathf.Approximately(strokeMm, 86f)
+                && Mathf.Approximately(rodLengthMm, 143f))
             {
-                foreach (Transform transform in sceneRoot.GetComponentsInChildren<Transform>(true))
-                {
-                    missingCount += GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(transform.gameObject);
-                }
+                Require(Math.Abs(controller.DisplacementLitres - 1.9982288568717088) <= 1e-12,
+                    "Visual fidelity work changed the authoritative 86 x 86 mm displacement reference.");
+                Require(Math.Abs(controller.RodStrokeRatio - 143.0 / 86.0) <= 1e-12,
+                    "Visual fidelity work changed the authoritative 143/86 rod-stroke ratio.");
             }
-
-            return missingCount;
-        }
-
-        private static int CountChildrenWithPrefix(Transform parent, string prefix)
-        {
-            int count = 0;
-            foreach (Transform child in parent.GetComponentsInChildren<Transform>(true))
-            {
-                if (child != parent && child.name.StartsWith(prefix, StringComparison.Ordinal)) count++;
-            }
-
-            return count;
-        }
-
-        private static void RequireGroupChildCount(Transform contextRoot, string groupName, int expectedCount)
-        {
-            Transform group = contextRoot.Find(groupName);
-            Require(group != null, $"Context group '{groupName}' is missing.");
-            Require(group.childCount == expectedCount,
-                $"Context group '{groupName}' expected {expectedCount} objects, found {group.childCount}.");
         }
 
         private static void VerifyPresentationControls(
             EngineLabController controller,
-            InlineFourVisualizer visualizer,
-            InlineFourEngineContextVisualizer contextVisualizer,
+            InlineFourVisualFidelityAssembly visualAssembly,
             EngineLabInspectionCamera inspectionCamera)
         {
             float simulatedOperatingRpm = controller.EngineSpeedRpm;
-            bool originalPlaying = visualizer.IsTeachingAnimationPlaying;
-            float originalTeachingRpm = visualizer.TeachingAnimationRpm;
-            float originalAngleDeg = visualizer.CurrentCrankAngleDeg;
-            bool originalRotatingVisibility = visualizer.IsRotatingAssemblyVisible;
-            bool originalPistonVisibility = visualizer.ArePistonsAndRodsVisible;
-            bool originalGuideVisibility = visualizer.AreBoreGuidesVisible;
-            bool originalBlockVisibility = contextVisualizer.IsBlockEnvelopeVisible;
-            bool originalLinerVisibility = contextVisualizer.AreCylinderLinersVisible;
-            bool originalDeckVisibility = contextVisualizer.IsDeckPlaneVisible;
-            bool originalHeadVisibility = contextVisualizer.IsHeadEnvelopeVisible;
-
-            visualizer.SetTeachingAnimationPlaying(false);
-            visualizer.SetTeachingAnimationRpm(42f);
-            visualizer.SetCrankAngleDeg(123f);
-            Require(!visualizer.IsTeachingAnimationPlaying, "Teaching animation did not pause.");
-            Require(Mathf.Approximately(visualizer.TeachingAnimationRpm, 42f), "Teaching RPM did not update.");
-            Require(Mathf.Approximately(visualizer.CurrentCrankAngleDeg, 123f), "Crank-angle scrub state did not update.");
+            bool originalPlaying = visualAssembly.IsTeachingAnimationPlaying;
+            float originalTeachingRpm = visualAssembly.TeachingAnimationRpm;
+            float originalAngleDeg = visualAssembly.CurrentCrankAngleDeg;
+            EngineInspectionMode originalMode = visualAssembly.InspectionMode;
+            visualAssembly.SetTeachingAnimationPlaying(false);
+            visualAssembly.SetTeachingAnimationRpm(42f);
+            visualAssembly.SetCrankAngleDeg(123f);
+            Require(!visualAssembly.IsTeachingAnimationPlaying, "Teaching animation did not pause.");
+            Require(Mathf.Approximately(visualAssembly.TeachingAnimationRpm, 42f), "Teaching RPM did not update.");
+            Require(Mathf.Approximately(visualAssembly.CurrentCrankAngleDeg, 123f), "Crank-angle scrub state did not update.");
             Require(Mathf.Approximately(controller.EngineSpeedRpm, simulatedOperatingRpm),
                 "Teaching controls changed the simulated engine operating RPM.");
 
-            Transform mechanismRoot = controller.transform.Find(GeneratedRootName);
-            Transform contextRoot = controller.transform.Find(contextVisualizer.GeneratedHierarchyName);
-            visualizer.SetRotatingAssemblyVisible(false);
-            visualizer.SetPistonsAndRodsVisible(false);
-            visualizer.SetBoreGuidesVisible(false);
-            contextVisualizer.SetBlockEnvelopeVisible(false);
-            contextVisualizer.SetCylinderLinersVisible(false);
-            contextVisualizer.SetDeckPlaneVisible(false);
-            contextVisualizer.SetHeadEnvelopeVisible(false);
-            RequireGroupsInactive(mechanismRoot, "Rotating Assembly", "Pistons and Rods", "Bore Guides");
-            RequireGroupsInactive(contextRoot, "Block Envelope", "Cylinder Liners", "Deck Plane", "Cylinder Head Envelope");
+            Transform generatedRoot = controller.transform.Find(GeneratedRootName);
+            VerifyInspectionMode(visualAssembly, generatedRoot, EngineInspectionMode.FullEngine,
+                "Cylinder Block - Full", "Cylinder Head - Full", "Crankshaft External");
+            VerifyInspectionMode(visualAssembly, generatedRoot, EngineInspectionMode.Cutaway,
+                "Cylinder Block - Cutaway", "Block Internals and Liners", "Cylinder Head - Cutaway",
+                "Head Chambers and Ports", "Crankshaft Internal", "Crankshaft External",
+                "Pistons and Forged Rods", "DOHC Valvetrain");
+            VerifyInspectionMode(visualAssembly, generatedRoot, EngineInspectionMode.TransparentBlockAndHead,
+                "Cylinder Block - Full", "Block Internals and Liners", "Cylinder Head - Full",
+                "Head Chambers and Ports", "Crankshaft Internal", "Crankshaft External",
+                "Pistons and Forged Rods", "DOHC Valvetrain");
+            VerifyInspectionMode(visualAssembly, generatedRoot, EngineInspectionMode.RotatingAssemblyOnly,
+                "Crankshaft Internal", "Crankshaft External", "Pistons and Forged Rods");
+            VerifyInspectionMode(visualAssembly, generatedRoot, EngineInspectionMode.ValvetrainOnly,
+                "Head Chambers and Ports", "DOHC Valvetrain");
 
-            visualizer.SetTeachingAnimationPlaying(originalPlaying);
-            visualizer.SetTeachingAnimationRpm(originalTeachingRpm);
-            visualizer.SetCrankAngleDeg(originalAngleDeg);
-            visualizer.SetRotatingAssemblyVisible(originalRotatingVisibility);
-            visualizer.SetPistonsAndRodsVisible(originalPistonVisibility);
-            visualizer.SetBoreGuidesVisible(originalGuideVisibility);
-            contextVisualizer.SetBlockEnvelopeVisible(originalBlockVisibility);
-            contextVisualizer.SetCylinderLinersVisible(originalLinerVisibility);
-            contextVisualizer.SetDeckPlaneVisible(originalDeckVisibility);
-            contextVisualizer.SetHeadEnvelopeVisible(originalHeadVisibility);
-
+            visualAssembly.SetTeachingAnimationPlaying(originalPlaying);
+            visualAssembly.SetTeachingAnimationRpm(originalTeachingRpm);
+            visualAssembly.SetCrankAngleDeg(originalAngleDeg);
+            visualAssembly.SetInspectionMode(originalMode);
             inspectionCamera.ResetEngineView();
             Vector3 defaultPivot = inspectionCamera.Pivot;
             float defaultDistance = inspectionCamera.DistanceM;
@@ -336,7 +282,11 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
             inspectionCamera.SetOrbit(725f, 1000f);
             Require(inspectionCamera.YawDeg >= -180f && inspectionCamera.YawDeg < 180f,
                 "Inspection camera yaw normalization failed.");
-            Require(inspectionCamera.PitchDeg <= 80f, "Inspection camera pitch limit failed.");
+            Require(Mathf.Approximately(inspectionCamera.PitchDeg, inspectionCamera.MaximumPitchDeg),
+                "Inspection camera maximum pitch limit failed.");
+            inspectionCamera.SetOrbit(725f, -1000f);
+            Require(Mathf.Approximately(inspectionCamera.PitchDeg, inspectionCamera.MinimumPitchDeg),
+                "Inspection camera minimum pitch limit failed.");
             inspectionCamera.SetPivot(defaultPivot + Vector3.one * 100f);
             Require(Vector3.Distance(defaultPivot, inspectionCamera.Pivot) <= 0.65001f,
                 "Inspection camera pan/focus limit failed.");
@@ -347,15 +297,54 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
                 "Reset Engine View did not restore the default zoom.");
         }
 
-        private static void RequireGroupsInactive(Transform root, params string[] groupNames)
+        private static void VerifyInspectionMode(
+            InlineFourVisualFidelityAssembly visualAssembly,
+            Transform generatedRoot,
+            EngineInspectionMode mode,
+            params string[] expectedActiveGroups)
         {
-            Require(root != null, "Generated inspection hierarchy is missing.");
-            foreach (string groupName in groupNames)
+            visualAssembly.SetInspectionMode(mode);
+            Require(visualAssembly.InspectionMode == mode, $"Inspection mode {mode} did not apply.");
+            foreach (Transform group in generatedRoot)
             {
-                Transform group = root.Find(groupName);
-                Require(group != null && !group.gameObject.activeSelf,
-                    $"Inspection group '{groupName}' did not hide independently.");
+                if (group.name == "Inspection Lighting") continue;
+                bool shouldBeActive = Array.IndexOf(expectedActiveGroups, group.name) >= 0;
+                Require(group.gameObject.activeSelf == shouldBeActive,
+                    $"Inspection mode {mode} produced incorrect visibility for '{group.name}'.");
             }
+        }
+
+        private static int CountMissingScripts(Scene scene)
+        {
+            int missingCount = 0;
+            foreach (GameObject sceneRoot in scene.GetRootGameObjects())
+            foreach (Transform transform in sceneRoot.GetComponentsInChildren<Transform>(true))
+                missingCount += GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(transform.gameObject);
+            return missingCount;
+        }
+
+        private static int CountChildrenWithPrefix(Transform parent, string prefix)
+        {
+            int count = 0;
+            foreach (Transform child in parent.GetComponentsInChildren<Transform>(true))
+                if (child != parent && child.name.StartsWith(prefix, StringComparison.Ordinal)) count++;
+            return count;
+        }
+
+        private static void RequireGroupMinimum(Transform root, string groupName, int minimumDescendants)
+        {
+            Transform group = root.Find(groupName);
+            Require(group != null, $"Visual fidelity group '{groupName}' is missing.");
+            int descendantCount = group.GetComponentsInChildren<Transform>(true).Length - 1;
+            Require(descendantCount >= minimumDescendants,
+                $"Visual fidelity group '{groupName}' expected at least {minimumDescendants} objects, found {descendantCount}.");
+        }
+
+        private static Transform FindDescendant(Transform root, string exactName)
+        {
+            foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+                if (child.name == exactName) return child;
+            return null;
         }
 
         private static float ReadFloat(SerializedObject serializedObject, string propertyName)
@@ -373,15 +362,9 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
             property.floatValue = value;
         }
 
-        private static bool Approximately(Vector3 a, Vector3 b)
-        {
-            return (a - b).sqrMagnitude <= 1e-12f;
-        }
-
+        private static bool Approximately(Vector3 a, Vector3 b) => (a - b).sqrMagnitude <= 1e-12f;
         private static bool Approximately(Quaternion a, Quaternion b)
-        {
-            return Mathf.Abs(Quaternion.Dot(a, b)) >= 0.999999f;
-        }
+            => Mathf.Abs(Quaternion.Dot(a, b)) >= 0.999999f;
 
         private static void Require(bool condition, string message)
         {
@@ -390,72 +373,82 @@ namespace VehicleEngineeringSandbox.EngineLab.Editor
 
         private static void WriteReport(string report)
         {
-            string reportPath = Path.GetFullPath(Path.Combine(Application.dataPath, "../Temp/EngineLabSceneValidation.txt"));
-            Directory.CreateDirectory(Path.GetDirectoryName(reportPath));
-            File.WriteAllText(reportPath, report + Environment.NewLine, System.Text.Encoding.UTF8);
+            string path = Path.GetFullPath(Path.Combine(Application.dataPath, "../Temp/EngineLabSceneValidation.txt"));
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+            File.WriteAllText(path, report + Environment.NewLine, System.Text.Encoding.UTF8);
         }
 
         private static void AppendReport(string report)
         {
-            string reportPath = Path.GetFullPath(Path.Combine(Application.dataPath, "../Temp/EngineLabSceneValidation.txt"));
-            File.AppendAllText(reportPath, report + Environment.NewLine, System.Text.Encoding.UTF8);
+            string path = Path.GetFullPath(Path.Combine(Application.dataPath, "../Temp/EngineLabSceneValidation.txt"));
+            File.AppendAllText(path, report + Environment.NewLine, System.Text.Encoding.UTF8);
         }
 
         private static void ClearConsole()
         {
-            Type logEntriesType = typeof(UnityEditor.Editor).Assembly.GetType("UnityEditor.LogEntries");
-            MethodInfo clearMethod = logEntriesType?.GetMethod(
-                "Clear",
-                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-            Require(clearMethod != null, "Unity Console clear API was unavailable.");
-            clearMethod.Invoke(null, null);
+            Type type = typeof(UnityEditor.Editor).Assembly.GetType("UnityEditor.LogEntries");
+            MethodInfo method = type?.GetMethod("Clear", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            Require(method != null, "Unity Console clear API was unavailable.");
+            method.Invoke(null, null);
         }
 
         private static int GetConsoleErrorCount()
         {
-            Type logEntriesType = typeof(UnityEditor.Editor).Assembly.GetType("UnityEditor.LogEntries");
-            MethodInfo countMethod = logEntriesType?.GetMethod(
-                "GetCountsByType",
+            Type type = typeof(UnityEditor.Editor).Assembly.GetType("UnityEditor.LogEntries");
+            MethodInfo method = type?.GetMethod("GetCountsByType",
                 BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-            Require(countMethod != null, "Unity Console count API was unavailable.");
-
+            Require(method != null, "Unity Console count API was unavailable.");
             object[] counts = { 0, 0, 0 };
-            countMethod.Invoke(null, counts);
+            method.Invoke(null, counts);
             return (int)counts[0];
         }
 
-        private static string CaptureInspectionScreenshot()
+        private static string CaptureInspectionScreenshots()
         {
             Camera camera = Camera.main != null ? Camera.main : UnityEngine.Object.FindAnyObjectByType<Camera>();
             Require(camera != null, "Dedicated Engine Lab scene has no inspection camera.");
-
+            InlineFourVisualFidelityAssembly visualAssembly =
+                UnityEngine.Object.FindAnyObjectByType<InlineFourVisualFidelityAssembly>();
+            Require(visualAssembly != null, "Dedicated Engine Lab scene has no visual-fidelity assembly.");
             const int width = 1280;
             const int height = 720;
-            RenderTexture renderTexture = RenderTexture.GetTemporary(width, height, 24, RenderTextureFormat.ARGB32);
+            RenderTexture target = RenderTexture.GetTemporary(width, height, 24, RenderTextureFormat.ARGB32);
             RenderTexture previousActive = RenderTexture.active;
             RenderTexture previousTarget = camera.targetTexture;
+            EngineInspectionMode previousMode = visualAssembly.InspectionMode;
             var texture = new Texture2D(width, height, TextureFormat.RGB24, false);
-
+            var paths = new System.Collections.Generic.List<string>();
             try
             {
-                camera.targetTexture = renderTexture;
-                camera.Render();
-                RenderTexture.active = renderTexture;
-                texture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
-                texture.Apply();
+                camera.targetTexture = target;
+                foreach (EngineInspectionMode mode in Enum.GetValues(typeof(EngineInspectionMode)))
+                {
+                    visualAssembly.SetInspectionMode(mode);
+                    camera.GetComponent<EngineLabInspectionCamera>()?.SetPivot(
+                        visualAssembly.transform.TransformPoint(visualAssembly.RecommendedFocusPointLocal));
+                    camera.GetComponent<EngineLabInspectionCamera>()?.SetDistance(
+                        visualAssembly.RecommendedCameraDistanceM);
+                    camera.Render();
+                    RenderTexture.active = target;
+                    texture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+                    texture.Apply();
+                    string path = Path.GetFullPath(Path.Combine(Application.dataPath,
+                        $"../Logs/EngineLabValidation_{mode}.png"));
+                    Directory.CreateDirectory(Path.GetDirectoryName(path));
+                    File.WriteAllBytes(path, texture.EncodeToPNG());
+                    paths.Add(path);
+                }
 
-                string screenshotPath = Path.GetFullPath(
-                    Path.Combine(Application.dataPath, "../Logs/EngineLabInteractiveValidation.png"));
-                Directory.CreateDirectory(Path.GetDirectoryName(screenshotPath));
-                File.WriteAllBytes(screenshotPath, texture.EncodeToPNG());
-                return screenshotPath;
+                return string.Join(", ", paths);
             }
             finally
             {
+                visualAssembly.SetInspectionMode(previousMode);
+                camera.GetComponent<EngineLabInspectionCamera>()?.ResetEngineView();
                 camera.targetTexture = previousTarget;
                 RenderTexture.active = previousActive;
                 UnityEngine.Object.DestroyImmediate(texture);
-                RenderTexture.ReleaseTemporary(renderTexture);
+                RenderTexture.ReleaseTemporary(target);
             }
         }
     }
