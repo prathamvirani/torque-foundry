@@ -1,3 +1,9 @@
+# Text files: normalize to LF for Unity and cross-platform development
+* text=auto eol=lf
+
+# Windows command scripts require CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
 # Git LFS for large/binary game assets
 *.fbx filter=lfs diff=lfs merge=lfs -text
 *.blend filter=lfs diff=lfs merge=lfs -text
