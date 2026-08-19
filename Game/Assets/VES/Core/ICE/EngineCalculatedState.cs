@@ -12,13 +12,15 @@ namespace VehicleEngineeringSandbox.Core.ICE
         public double ClearanceVolumePerCylinderM3 { get; }
         public double MeanPistonSpeedMps { get; }
         public double BoreStrokeRatio { get; }
+        public double RodStrokeRatio { get; }
 
         public EngineCalculatedState(
             double totalDisplacementM3,
             double sweptVolumePerCylinderM3,
             double clearanceVolumePerCylinderM3,
             double meanPistonSpeedMps,
-            double boreStrokeRatio)
+            double boreStrokeRatio,
+            double rodStrokeRatio)
         {
             TotalDisplacementM3 = totalDisplacementM3;
             TotalDisplacementLitres = totalDisplacementM3 * 1000.0;
@@ -26,6 +28,7 @@ namespace VehicleEngineeringSandbox.Core.ICE
             ClearanceVolumePerCylinderM3 = clearanceVolumePerCylinderM3;
             MeanPistonSpeedMps = meanPistonSpeedMps;
             BoreStrokeRatio = boreStrokeRatio;
+            RodStrokeRatio = rodStrokeRatio;
         }
     }
 }
